@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Cortex.AppHost/Cortex.AppHost.csproj" />
+  <Project Path="Cortex.ServiceDefaults/Cortex.ServiceDefaults.csproj" />
+</Solution>
