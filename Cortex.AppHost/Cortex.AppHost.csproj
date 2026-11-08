@@ -9,4 +9,8 @@
         <AspireUseCliBundle>true</AspireUseCliBundle>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Aspire.Hosting.Keycloak" Version="13.6.4-preview.1.26523.11" />
+    </ItemGroup>
+
 </Project>

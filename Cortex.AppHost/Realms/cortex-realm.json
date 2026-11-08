@@ -1,0 +1,142 @@
+{
+  "realm": "cortex",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+
+  "roles": {
+    "realm": [
+      { 
+        "name": "user",  
+        "description": "Regular Cortex member"
+      },
+      { 
+        "name": "admin", 
+        "description": "Cortex administrator"
+      },
+      { 
+        "name": "offline_access",   
+        "description": "${role_offline-access}",     
+        "composite": false, 
+        "clientRole": false
+      },
+      { 
+        "name": "uma_authorization", 
+        "description": "${role_uma_authorization}", 
+        "composite": false, 
+        "clientRole": false
+      },
+      {
+        "name": "default-roles-cortex",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": ["offline_access", "uma_authorization", "user"],
+          "client": { "account": ["manage-account", "view-profile"] }
+        },
+        "clientRole": false
+      }
+    ]
+  },
+
+  "defaultRole": { "name": "default-roles-cortex" },
+
+  "clients": [
+    {
+      "clientId": "cortex-web",
+      "name": "Cortex Web (Next.js)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-only-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "defaultClientScopes": ["web-origins", "profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "cortex-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "cortex-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "cortex-api",
+      "name": "Cortex API (Gateway / services)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "bearerOnly": true
+    },
+    {
+      "clientId": "cortex-dev-tools",
+      "name": "Dev tooling (Postman / Bruno / .http)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["https://oauth.pstmn.io/v1/callback"],
+      "defaultClientScopes": ["web-origins", "profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "cortex-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "cortex-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+
+  "users": [
+    {
+      "username": "reader",
+      "email": "reader@cortex.local",
+      "firstName": "Test",
+      "lastName": "Reader",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Password123!", "temporary": false }],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "hephaestots",
+      "email": "hephaestots@cortex.local",
+      "firstName": "Hephae",
+      "lastName": "Stots",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Password123!", "temporary": false }],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "admin-user",
+      "email": "admin@cortex.local",
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Password123!", "temporary": false }],
+      "realmRoles": ["user", "admin"]
+    }
+  ]
+}
