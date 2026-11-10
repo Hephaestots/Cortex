@@ -9,6 +9,8 @@
 
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Aspire.Keycloak.Authentication" Version="13.6.4-preview.1.26523.11" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
 
         <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
         <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.0.0" />
