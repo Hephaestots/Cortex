@@ -4,9 +4,9 @@ Last updated: 2026-11-11. Update this file when a milestone lands or a decision 
 
 ## Where things stand
 - **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import) and the question service. **Postgres and RabbitMQ are not in the AppHost yet**: Postgres is added in step 3, RabbitMQ in step 4.
-- **Keycloak** realm `cortex` is imported from `Cortex.AppHost/Realms/cortex-realm.json` and working end to end.
+- **Keycloak** realm `cortex` is imported from `src/Cortex.AppHost/Realms/cortex-realm.json` and working end to end.
 - **ServiceDefaults** holds the Aspire defaults plus `AddCortexAuth()` (Keycloak JWT bearer, audience `cortex-api`, `roles` role claim, `AdminOnly` policy).
-- **Question service** (`Cortex.QuestionService`) is just starting. Wolverine.HTTP 6 is set up as the base for endpoints. No database and no CRUD for questions or answers yet.
+- **Question service** (`src/Services/Cortex.QuestionService`) is just starting. Wolverine.HTTP 6 is set up as the base for endpoints. No database and no CRUD for questions or answers yet.
 - Existing endpoints, both converted from Minimal APIs to Wolverine.HTTP:
   - `GET /api/account/me`: static `MeEndpoint`, `[Authorize]`, returns `MeResponse(UserId, UserName, Email, Roles)` read from claims (`sub`, `Identity.Name`, `email`, flat `roles`).
   - `GET /api/admin/ping`: `[Authorize(Policy = Policies.AdminOnly)]` (the policy requires the `admin` role). Verified 401 without a token, 403 as `user`, 200 as `admin`.
@@ -34,7 +34,7 @@ Each item is one small commit.
 Tags and votes are out of scope here (step 5 of the build order).
 
 ## Decisions taken for step 3 (2026-11-11)
-- **Layout:** move to `src/` and `src/Services/` now, before migrations exist.
+- **Layout:** projects live in `src/` and `src/Services/` (moved before migrations exist).
 - **Routes:** keep the `/api/...` prefix on every endpoint.
 - **No events yet:** writes return only the HTTP result and call `SaveChangesAsync` explicitly. Step 4 adds the event tuples and Wolverine's EF Core transaction middleware.
 - **Migrations:** applied at startup, in Development only.

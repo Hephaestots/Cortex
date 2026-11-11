@@ -14,7 +14,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Cortex.QuestionService\Cortex.QuestionService.csproj" />
+      <ProjectReference Include="..\Services\Cortex.QuestionService\Cortex.QuestionService.csproj" />
     </ItemGroup>
 
 </Project>

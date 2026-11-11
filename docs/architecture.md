@@ -267,7 +267,7 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 ## Auth
 - Keycloak issues JWTs. **Both the gateway and each service validate them** (signature, issuer, audience `cortex-api`). Validating twice costs little and means a service is never open just because it is reachable without going through the gateway.
 - Services get this from `builder.AddCortexAuth()` in `Cortex.ServiceDefaults`: Keycloak JWT bearer with the authority resolved through Aspire service discovery, `roles` as the role claim, `preferred_username` as the name claim, and the `AdminOnly` policy. There is no `Auth:*` configuration section.
-- The realm is defined in `Cortex.AppHost/Realms/cortex-realm.json` and imported when Keycloak starts. Keycloak skips the import if the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume, so an edit to the file only takes effect after that volume (or the realm) is deleted.
+- The realm is defined in `src/Cortex.AppHost/Realms/cortex-realm.json` and imported when Keycloak starts. Keycloak skips the import if the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume, so an edit to the file only takes effect after that volume (or the realm) is deleted.
 - Roles kept minimal at first: `user` and `admin`.
 
 ## Frontend
@@ -276,7 +276,7 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 - TanStack Query for fetched data, caching and mutations. Zustand only for local UI state (modals, drafts, filters).
 
 ## Solution layout
-Target layout. Only `Cortex.AppHost`, `Cortex.ServiceDefaults` and `Cortex.QuestionService` exist so far, and until the approved move lands they sit at the repo root (see `docs/status.md`).
+Target layout. Only `Cortex.AppHost`, `Cortex.ServiceDefaults` and `Cortex.QuestionService` exist so far (see `docs/status.md`). `Cortex.slnx` and `aspire.config.json` stay at the repo root.
 ```
 Cortex/
   src/

@@ -13,8 +13,8 @@ Read these before larger changes:
 
 ## Environment
 - WSL2 (distro `Ubuntu-new`), repo at `~/dev/Cortex`, solution `Cortex.slnx`. Edited in JetBrains Rider via Remote Development.
-- Run everything through the Aspire AppHost (`dotnet run --project <AppHost project>`). Today it starts Keycloak and the question service; Postgres is added in build step 3 and RabbitMQ in step 4 (see `docs/status.md`).
-- Layout: projects currently sit at the repo root. The move to `src/` and `src/Services/` (as in `docs/architecture.md`) is approved and pending.
+- Run everything through the Aspire AppHost (`dotnet run --project src/Cortex.AppHost`). Today it starts Keycloak and the question service; Postgres is added in build step 3 and RabbitMQ in step 4 (see `docs/status.md`).
+- Layout: `src/Cortex.AppHost`, `src/Cortex.ServiceDefaults`, services under `src/Services/` (see "Solution layout" in `docs/architecture.md`).
 - GitHub: `Hephaestots/Cortex`, default branch `main`.
 
 ## Conventions (must follow)
@@ -32,7 +32,7 @@ Read these before larger changes:
 - Wolverine discovery is assembly-scoped: endpoints/handlers in another assembly need `opts.Discovery.IncludeAssembly(...)`.
 
 ## Auth
-- Keycloak realm `cortex`, imported from `Cortex.AppHost/Realms/cortex-realm.json`, which is the **source of truth** (edit it, don't click-configure).
+- Keycloak realm `cortex`, imported from `src/Cortex.AppHost/Realms/cortex-realm.json`, which is the **source of truth** (edit it, don't click-configure).
 - Keycloak only imports a realm that does not exist yet, and the AppHost keeps Keycloak's data in the `keycloak-data` volume. After editing the realm file, delete that volume (or the realm) so the next start re-imports it.
 - **Both the gateway and each service validate JWTs.** Services call `builder.AddCortexAuth()` (ServiceDefaults): audience `cortex-api`, authority resolved through Aspire service discovery. There is no `Auth:*` configuration to set.
 - Realm roles: `user`, `admin`. Clients: `cortex-web` (Next.js, confidential + PKCE), `cortex-api` (bearer-only, the audience), `cortex-dev-tools` (public, for Postman). Test users: `reader`, `hephaestots`, `admin-user`.

@@ -14,7 +14,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Cortex.ServiceDefaults\Cortex.ServiceDefaults.csproj" />
+      <ProjectReference Include="..\..\Cortex.ServiceDefaults\Cortex.ServiceDefaults.csproj" />
     </ItemGroup>
 
 </Project>

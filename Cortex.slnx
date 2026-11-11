@@ -1,7 +1,9 @@
 <Solution>
-  <Folder Name="/Services/">
-    <Project Path="Cortex.QuestionService\Cortex.QuestionService.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/Cortex.AppHost/Cortex.AppHost.csproj" />
+    <Project Path="src/Cortex.ServiceDefaults/Cortex.ServiceDefaults.csproj" />
   </Folder>
-  <Project Path="Cortex.AppHost/Cortex.AppHost.csproj" />
-  <Project Path="Cortex.ServiceDefaults/Cortex.ServiceDefaults.csproj" />
+  <Folder Name="/src/Services/">
+    <Project Path="src/Services/Cortex.QuestionService/Cortex.QuestionService.csproj" />
+  </Folder>
 </Solution>
