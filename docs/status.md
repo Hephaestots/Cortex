@@ -3,7 +3,8 @@
 Last updated: 2026-11-11. Update this file when a milestone lands or a decision changes.
 
 ## Where things stand
-- **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import) and the question service. **Postgres and RabbitMQ are not in the AppHost yet**: Postgres is added in step 3, RabbitMQ in step 4.
+- **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import), Postgres (`postgres` server, `postgres-data` volume, database `questions-db`) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
+- The question service receives its connection string as `ConnectionStrings:questions-db` but does not use it yet.
 - **Keycloak** realm `cortex` is imported from `src/Cortex.AppHost/Realms/cortex-realm.json` and working end to end.
 - **ServiceDefaults** holds the Aspire defaults plus `AddCortexAuth()` (Keycloak JWT bearer, audience `cortex-api`, `roles` role claim, `AdminOnly` policy).
 - **Question service** (`src/Services/Cortex.QuestionService`) is just starting. Wolverine.HTTP 6 is set up as the base for endpoints. No database and no CRUD for questions or answers yet.
@@ -15,7 +16,7 @@ Last updated: 2026-11-11. Update this file when a milestone lands or a decision 
 ## Build order progress
 | Step | State |
 |---|---|
-| 1. AppHost infrastructure | Keycloak done. Postgres moves to step 3, RabbitMQ to step 4. |
+| 1. AppHost infrastructure | Keycloak and Postgres done. RabbitMQ moves to step 4. |
 | 2. Gateway plus Next.js auth round trip | Deferred until after step 3. Services validate JWTs themselves, so step 3 does not depend on it. |
 | 3. Questions and answers CRUD | In progress (plan below). |
 | 4 to 7 | Not started. |
@@ -24,7 +25,7 @@ Last updated: 2026-11-11. Update this file when a milestone lands or a decision 
 Each item is one small commit.
 1. ~~Bring the docs in line with the code and the decisions below.~~ Done.
 2. ~~Move the projects to `src/` and `src/Services/` (own commit), and delete the unused `Auth:*` config.~~ Done.
-3. Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.
+3. ~~Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.~~ Done.
 4. EF Core skeleton: `Data/QuestionsDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.
 5. Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.
 6. Question slices: `CreateQuestion`, `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
@@ -46,6 +47,8 @@ Tags and votes are out of scope here (step 5 of the build order).
 - **Access tokens lacked `sub`** until the `basic` client scope was added to the clients. Now in the realm file.
 - **Roles:** the built-in roles scope was removed in favour of a flat `roles` mapper on `cortex-web` and `cortex-dev-tools`, so read `roles`, not `realm_access.roles`.
 - **Realm edits need a fresh volume:** Keycloak skips the import when the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume. After editing `cortex-realm.json`, delete that volume (or the realm) and restart, otherwise the change is silently ignored.
+- **`dotnet run` on the AppHost fails:** with `AspireUseCliBundle`, `dotnet run --project src/Cortex.AppHost` delegates to `aspire run --no-build`, which the CLI rejects while `defaultWatchEnabled` is true in `aspire.config.json` ("The --no-build option cannot be used when watch mode is enabled"). Use `aspire run` from the repo root.
+- **Postgres password and volume go together:** Aspire generates the Postgres password once and keeps it in the AppHost's user secrets, while the data lives in the `postgres-data` volume. If one is reset without the other, logins fail; delete the volume to start clean.
 
 ## Known leftovers
 - `Program.cs` in the question service has an unused `using System.Security.Claims`.

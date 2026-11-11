@@ -260,7 +260,7 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 - Respect their usage guidelines (identify the app in the User-Agent and cache responses).
 
 ## Data
-- One PostgreSQL server in dev (Aspire), separate database per service.
+- One PostgreSQL server in dev (Aspire resource `postgres`, volume `postgres-data`), separate database per service. The database resource name (`questions-db`) is also the connection string name the service reads. One server is cheaper locally than a container per service, and isolation still holds because no service is given another service's connection string.
 - The Questions service uses EF Core. Marten fits Wolverine well and remains an option for a later service.
 - Migrations are applied at startup in Development only. That is simple but not suitable for production (several instances racing, schema changes tied to app start); a separate migration step comes with the Docker work.
 

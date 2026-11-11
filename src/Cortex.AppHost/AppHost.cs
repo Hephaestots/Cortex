@@ -5,9 +5,21 @@ var keycloak = builder
     .WithDataVolume("keycloak-data")
     .WithRealmImport("./Realms");
 
+// One Postgres server for the whole dev environment, one database per service.
+// The volume keeps data across restarts; delete it to start from an empty server.
+var postgres = builder
+    .AddPostgres("postgres")
+    .WithDataVolume("postgres-data");
+
+// The resource name is also the connection string name the service reads
+// (ConnectionStrings:questions-db).
+var questionsDb = postgres.AddDatabase("questions-db");
+
 var questionService = builder
     .AddProject<Projects.Cortex_QuestionService>("question-service")
     .WithReference(keycloak)
-    .WaitFor(keycloak);
+    .WaitFor(keycloak)
+    .WithReference(questionsDb)
+    .WaitFor(questionsDb);
 
-builder.Build().Run();
+builder.Build().Run();

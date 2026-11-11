@@ -13,7 +13,7 @@ Read these before larger changes:
 
 ## Environment
 - WSL2 (distro `Ubuntu-new`), repo at `~/dev/Cortex`, solution `Cortex.slnx`. Edited in JetBrains Rider via Remote Development.
-- Run everything through the Aspire AppHost (`dotnet run --project src/Cortex.AppHost`). Today it starts Keycloak and the question service; Postgres is added in build step 3 and RabbitMQ in step 4 (see `docs/status.md`).
+- Run everything through the Aspire AppHost with the Aspire CLI from the repo root: `aspire run` (or `aspire start` / `aspire stop` for a background run, `aspire describe <resource>` to inspect one). `dotnet run --project src/Cortex.AppHost` fails while watch mode is on in `aspire.config.json`. Today it starts Keycloak, Postgres (one server, database `questions-db`) and the question service; RabbitMQ is added in build step 4 (see `docs/status.md`).
 - Layout: `src/Cortex.AppHost`, `src/Cortex.ServiceDefaults`, services under `src/Services/` (see "Solution layout" in `docs/architecture.md`).
 - GitHub: `Hephaestots/Cortex`, default branch `main`.
 
