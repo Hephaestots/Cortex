@@ -23,7 +23,7 @@ Last updated: 2026-11-11. Update this file when a milestone lands or a decision 
 ## Step 3 plan
 Each item is one small commit.
 1. ~~Bring the docs in line with the code and the decisions below.~~ Done.
-2. Move the projects to `src/` and `src/Services/` (own commit), and delete the unused `Auth:*` config.
+2. ~~Move the projects to `src/` and `src/Services/` (own commit), and delete the unused `Auth:*` config.~~ Done.
 3. Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.
 4. EF Core skeleton: `Data/QuestionsDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.
 5. Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.
@@ -39,7 +39,7 @@ Tags and votes are out of scope here (step 5 of the build order).
 - **No events yet:** writes return only the HTTP result and call `SaveChangesAsync` explicitly. Step 4 adds the event tuples and Wolverine's EF Core transaction middleware.
 - **Migrations:** applied at startup, in Development only.
 - **IDs:** version 7 GUIDs for entities; the Keycloak user id is stored as a string.
-- **Auth:** both the gateway and the services validate JWTs. The unused `Auth:Authority` / `Auth:Audience` settings are to be deleted.
+- **Auth:** both the gateway and the services validate JWTs. The unused `Auth:Authority` / `Auth:Audience` settings were deleted.
 
 ## Gotchas already hit
 - **Wolverine 6 wouldn't start** until `WolverineFx.RuntimeCompilation` was added and enabled with `opts.UseRuntimeCompilation()`.
@@ -48,5 +48,4 @@ Tags and votes are out of scope here (step 5 of the build order).
 - **Realm edits need a fresh volume:** Keycloak skips the import when the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume. After editing `cortex-realm.json`, delete that volume (or the realm) and restart, otherwise the change is silently ignored.
 
 ## Known leftovers
-- `Auth:Authority` and `Auth:Audience` in `appsettings.Development.json` of both the AppHost and the question service are read by nothing (`AddCortexAuth` uses service discovery). Removed in step 3 item 2.
 - `Program.cs` in the question service has an unused `using System.Security.Claims`.
