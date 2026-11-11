@@ -34,6 +34,22 @@ Each item is one small commit.
 
 Tags and votes are out of scope here (step 5 of the build order).
 
+## Next up: item 4, EF Core skeleton
+Nothing in the question service touches the database yet. Item 4 adds the plumbing only, with no entities:
+- `Data/QuestionsDbContext` registered against the `questions-db` connection string (Aspire's Npgsql EF Core integration), so the service gets a Postgres health check and telemetry with it.
+- `Infrastructure/CurrentUser` (reads `sub` and roles from the claims), `Infrastructure/WolverineSetup` (`ConfigureQuestionService`, holding today's `UseRuntimeCompilation()`), `Infrastructure/ServiceCollectionExtensions` (`AddQuestionServiceData()`).
+- `Program.cs` reduced to the shape shown in `docs/architecture.md`, and the unused `using` removed.
+- Dev-only startup migration hook, which has nothing to apply until item 5 adds the first migration.
+
+Done when: the solution builds, `aspire run` shows the question service healthy with the database health check included, and the two existing endpoints behave as before.
+
+## Repository state
+- Items 1 to 3 are on `main`. There are no open branches.
+- Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
+- Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
+- Not verified since the move to `src/`: a full token round trip (200 on `/api/account/me`, 403/200 on `/api/admin/ping`). The auth code and realm file are unchanged, only their paths.
+- Local Docker volumes in use: `keycloak-data`, `postgres-data`.
+
 ## Decisions taken for step 3 (2026-11-11)
 - **Layout:** projects live in `src/` and `src/Services/` (moved before migrations exist).
 - **Routes:** keep the `/api/...` prefix on every endpoint.
