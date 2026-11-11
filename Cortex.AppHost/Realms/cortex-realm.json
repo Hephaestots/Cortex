@@ -9,24 +9,24 @@
 
   "roles": {
     "realm": [
-      { 
-        "name": "user",  
+      {
+        "name": "user",
         "description": "Regular Cortex member"
       },
-      { 
-        "name": "admin", 
+      {
+        "name": "admin",
         "description": "Cortex administrator"
       },
-      { 
-        "name": "offline_access",   
-        "description": "${role_offline-access}",     
-        "composite": false, 
+      {
+        "name": "offline_access",
+        "description": "${role_offline-access}",
+        "composite": false,
         "clientRole": false
       },
-      { 
-        "name": "uma_authorization", 
-        "description": "${role_uma_authorization}", 
-        "composite": false, 
+      {
+        "name": "uma_authorization",
+        "description": "${role_uma_authorization}",
+        "composite": false,
         "clientRole": false
       },
       {
@@ -61,7 +61,7 @@
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*"
       },
-      "defaultClientScopes": ["web-origins", "profile", "email", "roles"],
+      "defaultClientScopes": ["basic", "web-origins", "profile", "email"],
       "protocolMappers": [
         {
           "name": "cortex-api-audience",
@@ -71,6 +71,21 @@
             "included.client.audience": "cortex-api",
             "access.token.claim": "true",
             "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "user realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false",
+            "lightweight.claim": "false"
           }
         }
       ]
@@ -91,7 +106,8 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "redirectUris": ["https://oauth.pstmn.io/v1/callback"],
-      "defaultClientScopes": ["web-origins", "profile", "email", "roles"],
+      "webOrigins": ["https://oauth.pstmn.io"],
+      "defaultClientScopes": ["basic", "web-origins", "profile", "email"],
       "protocolMappers": [
         {
           "name": "cortex-api-audience",
@@ -101,6 +117,21 @@
             "included.client.audience": "cortex-api",
             "access.token.claim": "true",
             "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "user realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false",
+            "lightweight.claim": "false"
           }
         }
       ]

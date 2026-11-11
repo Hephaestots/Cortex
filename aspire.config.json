@@ -1,5 +1,8 @@
 {
   "appHost": {
     "path": "Cortex.AppHost/Cortex.AppHost.csproj"
+  },
+  "features": {
+    "defaultWatchEnabled": "true"
   }
 }
