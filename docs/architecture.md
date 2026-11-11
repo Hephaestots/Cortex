@@ -1,4 +1,4 @@
-# Cortex: Architecture (draft v0.5)
+# Cortex: Architecture (draft v0.6)
 
 Status: working draft. Decisions are listed below; everything else is still a proposal.
 
@@ -14,6 +14,11 @@ Status: working draft. Decisions are listed below; everything else is still a pr
 - **Wolverine.HTTP endpoints for all HTTP routes** (reads and writes), not Minimal APIs or controllers, organized per feature (see "Service project layout").
 - **Vertical-slice project layout** for every service (see "Service project layout").
 - **gRPC is deferred to v1.2** as an optional add-on around Reputation (see "Planned add-ons").
+- **All routes start with `/api/`** (for example `/api/questions/{id}`), in the services themselves, so the gateway can forward paths unchanged.
+- **Entity IDs are version 7 GUIDs** (`Guid.CreateVersion7()`), generated in the domain so the ID exists before saving. **The Keycloak user id (`sub`) is stored as a string**, so nothing depends on the identity provider issuing GUIDs.
+- **EF Core on PostgreSQL** for the Questions service. Migrations are applied at startup in Development only.
+- **Both the gateway and each service validate JWTs** (see "Auth").
+- **Messaging arrives in build step 4.** Until then writes return only the HTTP result and call `SaveChangesAsync` explicitly (see "Service project layout").
 
 ## Principles
 - Start with few services and split only where a boundary is clear.
@@ -24,7 +29,7 @@ Status: working draft. Decisions are listed below; everything else is still a pr
 ## Services
 | Service | Owns | Notes |
 |---|---|---|
-| **Questions** | questions, answers, tags, votes | Core of the Q&A half. Publishes `QuestionPosted`, `AnswerPosted`, `AnswerAccepted`, `VoteCast`. Project: `Services/Cortex.QuestionService`, Aspire resource `question-service`. |
+| **Questions** | questions, answers, tags, votes | Core of the Q&A half. Publishes `QuestionPosted`, `AnswerPosted`, `AnswerAccepted`, `VoteCast`. Project: `src/Services/Cortex.QuestionService`, Aspire resource `question-service`. |
 | **Profiles** | user profiles, book catalog entries, shelf entries, reviews | The Fable-style half. Keyed to the Keycloak user id. Talks to Open Library. |
 | **Reputation** | reputation scores | Pure event consumer. Can be folded into Questions at first. |
 | **Search** | read-optimized search index | Consumes events. Postgres full-text first. |
@@ -52,7 +57,7 @@ Applies to every Cortex service, and is the reference layout for other .NET serv
 
 Example for the Questions service:
 ```
-Services/Cortex.QuestionService/
+src/Services/Cortex.QuestionService/
   Program.cs
   appsettings.json
 
@@ -65,7 +70,7 @@ Services/Cortex.QuestionService/
       DeleteQuestion.cs
       AcceptAnswer.cs
     Answers/
-      PostAnswer.cs               // [WolverinePost("/questions/{questionId}/answers")]
+      PostAnswer.cs               // [WolverinePost("/api/questions/{questionId}/answers")]
       UpdateAnswer.cs
       DeleteAnswer.cs
     Votes/
@@ -102,6 +107,7 @@ Services/Cortex.QuestionService/
 - **Method injection, no constructors.** Dependencies (`QuestionsDbContext`, `CurrentUser`, `CancellationToken`, route values, the request body) are parameters of the endpoint method.
 - **Load / Validate / Handle split** (Wolverine's compound handler conventions) for endpoints that act on an existing entity: a `Load` or `Before` method fetches the entity and can return `NotFound`/`ProblemDetails` to stop the request, so the main method only contains the business logic. Validation through `WolverineFx.Http.FluentValidation` middleware.
 - **Writes return their events.** An endpoint that changes state returns a tuple of the HTTP result and the event(s), for example `(Created<AnswerDto>, AnswerPosted)`. Wolverine publishes the returned event as a cascading message; with the outbox enabled it is stored in the same transaction as the EF Core changes. Endpoints do not inject `IMessageBus` unless they need something cascading cannot do (for example scheduling).
+  - **Not yet, in build step 3.** There is no messaging and no `Cortex.Contracts` until step 4, so step 3 writes return only the HTTP result and call `db.SaveChangesAsync(ct)` themselves. Step 4 adds the event to the return tuple and removes the explicit save in favour of Wolverine's EF Core transaction middleware. The cost is touching each write endpoint twice; the benefit is seeing exactly what the middleware takes over.
 - **Reads are plain endpoints.** Queries return `Results<Ok<T>, NotFound>` and publish nothing. Same attribute style as writes, so there is one way of doing HTTP in the service.
 - **`Domain/`**: entities and their rules (for example `question.Accept(answer)` checking the answer belongs to it). No EF Core, HTTP or Wolverine concerns.
 - **`Data/`**: DbContext, one `IEntityTypeConfiguration<T>` per entity (constraints, check constraints, composite keys), and migrations. Mapping stays out of the entities.
@@ -116,7 +122,7 @@ A read:
 public static class GetQuestionEndpoint
 {
     [Tags("Questions")]
-    [WolverineGet("/questions/{id}")]
+    [WolverineGet("/api/questions/{id}")]
     public static async Task<Results<Ok<QuestionDto>, NotFound>> Get(
         Guid id, QuestionsDbContext db, CancellationToken ct)
     {
@@ -126,7 +132,7 @@ public static class GetQuestionEndpoint
 }
 ```
 
-A write that loads an entity first and publishes an event:
+A write that loads an entity first and publishes an event (the shape from build step 4 on; in step 3 the same endpoint returns only `Created<AnswerDto>` and calls `SaveChangesAsync`):
 ```csharp
 public record PostAnswer(string Body);
 
@@ -144,7 +150,7 @@ public static class PostAnswerEndpoint
 
     [Authorize]
     [Tags("Answers")]
-    [WolverinePost("/questions/{questionId}/answers")]
+    [WolverinePost("/api/questions/{questionId}/answers")]
     public static (Created<AnswerDto>, AnswerPosted) Post(
         PostAnswer cmd, Question question, CurrentUser user, QuestionsDbContext db)
     {
@@ -152,7 +158,7 @@ public static class PostAnswerEndpoint
         db.Answers.Add(answer);   // saved by Wolverine's EF Core transaction middleware
 
         return (
-            TypedResults.Created($"/questions/{question.Id}/answers/{answer.Id}", answer.ToDto()),
+            TypedResults.Created($"/api/questions/{question.Id}/answers/{answer.Id}", answer.ToDto()),
             new AnswerPosted(answer.Id, question.Id, user.Id));
     }
 }
@@ -164,6 +170,7 @@ Stays short:
 ```csharp
 builder.AddServiceDefaults();
 builder.Services.AddOpenApi();
+builder.AddCortexAuth();       // Keycloak JWT bearer + policies, from ServiceDefaults
 builder.Services.AddQuestionServiceData(builder.Configuration);
 
 builder.Host.UseWolverine(opts => opts.ConfigureQuestionService(builder.Configuration));
@@ -172,11 +179,15 @@ builder.Services.AddWolverineHttp();
 var app = builder.Build();
 
 app.MapDefaultEndpoints();     // /health and /alive from ServiceDefaults, needed by Aspire
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapWolverineEndpoints();   // discovers every [WolverineGet/Post/...] in the assembly
 ```
 
+Today `Program.cs` still configures Wolverine inline (`opts.UseRuntimeCompilation()`); the extension methods above arrive with build step 3.
+
 `ConfigureQuestionService` (in `Infrastructure/WolverineSetup.cs`) grows in stages:
-1. **Endpoints only:** nothing beyond the defaults. Handler and endpoint discovery covers the service assembly.
+1. **Endpoints only:** runtime compilation (`WolverineFx.RuntimeCompilation`, needed for Wolverine 6 to start) and nothing else beyond the defaults. Handler and endpoint discovery covers the service assembly. Endpoints save with an explicit `SaveChangesAsync`.
 2. **Local events:** return events from endpoints and handle them in-process to see cascading work, no broker yet.
 3. **Outbox:** EF Core transaction integration, Postgres message persistence, auto-applied transactions.
 4. **RabbitMQ:** `WolverineFx.RabbitMQ`, connection from Aspire, publish rules for `Cortex.Contracts` events. Endpoint code does not change at this stage, only routing.
@@ -190,6 +201,10 @@ app.MapWolverineEndpoints();   // discovers every [WolverineGet/Post/...] in the
 
 ## Questions service: data model
 Entities (all inside the service boundary): `Questions`, `Answers`, `QuestionVotes`, `AnswerVotes`, `Tags`, `QuestionTags` (join table).
+
+**Keys and user references**
+- Primary keys are version 7 GUIDs created in the domain (`Guid.CreateVersion7()`). They are time-ordered, which keeps index inserts sequential, and the ID is known before the row is saved (needed for the `Created` location now and for events later).
+- Author and voter columns (`UserId`) hold the Keycloak `sub` claim as a string, with no FK: users live in Keycloak, outside the service boundary.
 
 **Relationships**
 - Questions 1 — N Answers (composition; answers cannot exist without their question).
@@ -246,10 +261,13 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 
 ## Data
 - One PostgreSQL server in dev (Aspire), separate database per service.
-- EF Core or Marten for persistence. Marten fits Wolverine well but is optional.
+- The Questions service uses EF Core. Marten fits Wolverine well and remains an option for a later service.
+- Migrations are applied at startup in Development only. That is simple but not suitable for production (several instances racing, schema changes tied to app start); a separate migration step comes with the Docker work.
 
 ## Auth
-- Keycloak issues JWTs. The gateway validates them and services trust the validated claims.
+- Keycloak issues JWTs. **Both the gateway and each service validate them** (signature, issuer, audience `cortex-api`). Validating twice costs little and means a service is never open just because it is reachable without going through the gateway.
+- Services get this from `builder.AddCortexAuth()` in `Cortex.ServiceDefaults`: Keycloak JWT bearer with the authority resolved through Aspire service discovery, `roles` as the role claim, `preferred_username` as the name claim, and the `AdminOnly` policy. There is no `Auth:*` configuration section.
+- The realm is defined in `Cortex.AppHost/Realms/cortex-realm.json` and imported when Keycloak starts. Keycloak skips the import if the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume, so an edit to the file only takes effect after that volume (or the realm) is deleted.
 - Roles kept minimal at first: `user` and `admin`.
 
 ## Frontend
@@ -258,11 +276,13 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 - TanStack Query for fetched data, caching and mutations. Zustand only for local UI state (modals, drafts, filters).
 
 ## Solution layout
+Target layout. Only `Cortex.AppHost`, `Cortex.ServiceDefaults` and `Cortex.QuestionService` exist so far, and until the approved move lands they sit at the repo root (see `docs/status.md`).
 ```
 Cortex/
   src/
     Cortex.AppHost/          # Aspire orchestration
-    Cortex.ServiceDefaults/
+      Realms/cortex-realm.json   # Keycloak realm, source of truth
+    Cortex.ServiceDefaults/  # Aspire defaults + AddCortexAuth()
     Cortex.Contracts/        # shared event types
     Cortex.Gateway/          # YARP
     Services/
@@ -275,10 +295,11 @@ Cortex/
 AppHost wiring per service: `AddProject<...>("<name>-service")` with `.WithReference(...)` and `.WaitFor(...)` for Keycloak, its database and RabbitMQ.
 
 ## Build order
-1. AppHost with Postgres, RabbitMQ and Keycloak running
-2. Gateway plus auth round trip from Next.js
-3. Questions service: CRUD for questions and answers as Wolverine.HTTP endpoints (no messaging yet)
-4. Wolverine events and outbox between Questions and one consumer
+Progress against these steps is tracked in `docs/status.md`.
+1. AppHost with Keycloak running. Postgres is added with step 3 and RabbitMQ with step 4, when something first uses them.
+2. Gateway plus auth round trip from Next.js (deferred until after step 3; services validate JWTs themselves, so step 3 does not need it)
+3. Questions service: Postgres in the AppHost, then CRUD for questions and answers as Wolverine.HTTP endpoints (no messaging yet)
+4. RabbitMQ in the AppHost, `Cortex.Contracts`, Wolverine events and outbox between Questions and one consumer
 5. Voting, then Profiles with Open Library lookups
 6. Search, Notifications, Reputation
 7. Docker images, then Azure deployment
@@ -293,7 +314,7 @@ AppHost wiring per service: `AddProject<...>("<name>-service")` with `.WithRefer
 ## Risks and watch-points
 - Too many services too early: the main cost for a solo learner.
 - Eventual consistency in the UI (votes and reputation lag): decide how the frontend handles it.
-- Keycloak setup friction: script the realm import so it is repeatable.
+- Keycloak setup friction: the realm import is scripted (`cortex-realm.json`), but it only runs for a realm that does not exist yet. Delete the `keycloak-data` volume after editing the file.
 - Open Library availability and rate limits: another reason to cache or copy records.
 - Circular FK between Questions and Answers (accepted answer): nullable column and insert order matter.
 - Forgetting `app.MapDefaultEndpoints()` in a service breaks Aspire health checks and `WaitFor`.

@@ -13,21 +13,28 @@ Read these before larger changes:
 
 ## Environment
 - WSL2 (distro `Ubuntu-new`), repo at `~/dev/Cortex`, solution `Cortex.slnx`. Edited in JetBrains Rider via Remote Development.
-- Run everything through the Aspire AppHost (`dotnet run --project <AppHost project>`), which starts Postgres, RabbitMQ and Keycloak.
+- Run everything through the Aspire AppHost (`dotnet run --project <AppHost project>`). Today it starts Keycloak and the question service; Postgres is added in build step 3 and RabbitMQ in step 4 (see `docs/status.md`).
+- Layout: projects currently sit at the repo root. The move to `src/` and `src/Services/` (as in `docs/architecture.md`) is approved and pending.
 - GitHub: `Hephaestots/Cortex`, default branch `main`.
 
 ## Conventions (must follow)
 - **Endpoints are Wolverine.HTTP**, not Minimal APIs or controllers: one static endpoint class per use case with `[WolverineGet/Post/Put/Delete("...")]`. No `MapGroup` or `<Resource>Endpoints.cs` files; `app.MapWolverineEndpoints()` discovers them.
+- **Routes start with `/api/`**, e.g. `/api/questions/{id}`.
 - **Vertical slices:** `Features/<Resource>/<UseCase>.cs` holds the request/response records, validator and endpoint. Plus `Domain/` (entities and rules, no EF/HTTP/Wolverine), `Data/` (DbContext, one `IEntityTypeConfiguration<T>` per entity, migrations), `Infrastructure/` (CurrentUser, Wolverine setup, DI extensions). One project per service.
 - **Method injection**, no constructors. Use the Load/Before + Handle split for endpoints that act on an existing entity. Validation via `WolverineFx.Http.FluentValidation`.
 - **Writes return their events** as a tuple, e.g. `(Created<AnswerDto>, AnswerPosted)`; don't inject `IMessageBus` unless cascading can't do it. Reads return `Results<Ok<T>, NotFound>` via `TypedResults`.
+  - **Until build step 4** (events and outbox) there is no messaging: writes return only the HTTP result and call `SaveChangesAsync` explicitly. Step 4 adds the event tuples and replaces the explicit save with Wolverine's EF Core transaction middleware.
+- **IDs:** entity IDs are `Guid.CreateVersion7()`, generated in the domain. The Keycloak user id (`sub`) is stored as a `string`, with no FK.
+- **Migrations** are applied at startup in Development only.
 - **Events live in `Cortex.Contracts`**, are immutable, and evolve compatibly (add optional fields; never rename or remove).
 - **Each service owns its data.** No cross-service DB reads/writes; reference other services' data by ID only (e.g. `Questions.BookId` = Open Library work key, never validated by Questions).
 - Every service calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()` (Aspire health checks and `WaitFor` depend on it).
 - Wolverine discovery is assembly-scoped: endpoints/handlers in another assembly need `opts.Discovery.IncludeAssembly(...)`.
 
 ## Auth
-- Keycloak realm `cortex`, imported from `realm.json`, which is the **source of truth** (edit it, don't click-configure).
+- Keycloak realm `cortex`, imported from `Cortex.AppHost/Realms/cortex-realm.json`, which is the **source of truth** (edit it, don't click-configure).
+- Keycloak only imports a realm that does not exist yet, and the AppHost keeps Keycloak's data in the `keycloak-data` volume. After editing the realm file, delete that volume (or the realm) so the next start re-imports it.
+- **Both the gateway and each service validate JWTs.** Services call `builder.AddCortexAuth()` (ServiceDefaults): audience `cortex-api`, authority resolved through Aspire service discovery. There is no `Auth:*` configuration to set.
 - Realm roles: `user`, `admin`. Clients: `cortex-web` (Next.js, confidential + PKCE), `cortex-api` (bearer-only, the audience), `cortex-dev-tools` (public, for Postman). Test users: `reader`, `hephaestots`, `admin-user`.
 - Tokens carry `sub` (via the `basic` client scope) and a flat `roles` claim (custom mapper); the built-in roles scope is removed, so there is no `realm_access`.
 
