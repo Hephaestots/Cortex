@@ -88,7 +88,7 @@ src/Services/Cortex.QuestionService/
     Tag.cs
 
   Data/
-    QuestionsDbContext.cs
+    QuestionDbContext.cs
     Configurations/               // IEntityTypeConfiguration<T> per entity
       QuestionConfiguration.cs    // composite FK for AcceptedAnswerId lives here
       AnswerConfiguration.cs
@@ -96,15 +96,15 @@ src/Services/Cortex.QuestionService/
     Migrations/
 
   Infrastructure/
-    CurrentUser.cs                // reads the Keycloak user id from claims
+    CurrentUser.cs                // the caller's id, name, email and roles, read from the JWT
     WolverineSetup.cs             // UseWolverine options: discovery, EF Core, outbox, RabbitMQ routing
-    ServiceCollectionExtensions.cs // AddQuestionServiceData(), AddQuestionAuth()...
+    ServiceCollectionExtensions.cs // AddQuestionServiceData(), AddCurrentUser(), ApplyMigrationsAsync()
 ```
 
 ### Rules of the layout
 - **`Features/<Resource>/<UseCase>.cs`**: one file per use case, holding its request and response records, an optional validator, and a static endpoint class with one method marked `[WolverineGet]`, `[WolverinePost]`, `[WolverinePut]` or `[WolverineDelete]`. The route lives on the attribute, so the file is self-contained.
 - **No `<Resource>Endpoints.cs` files.** Wolverine discovers endpoint classes in the service assembly when `app.MapWolverineEndpoints()` runs. Shared concerns that `MapGroup` used to cover are handled by standard ASP.NET Core attributes on the class or method (`[Authorize]`, `[Tags("Questions")]`) or by policies set in `MapWolverineEndpoints(opts => ...)`.
-- **Method injection, no constructors.** Dependencies (`QuestionsDbContext`, `CurrentUser`, `CancellationToken`, route values, the request body) are parameters of the endpoint method.
+- **Method injection, no constructors.** Dependencies (`QuestionDbContext`, `CurrentUser`, `CancellationToken`, route values, the request body) are parameters of the endpoint method.
 - **Load / Validate / Handle split** (Wolverine's compound handler conventions) for endpoints that act on an existing entity: a `Load` or `Before` method fetches the entity and can return `NotFound`/`ProblemDetails` to stop the request, so the main method only contains the business logic. Validation through `WolverineFx.Http.FluentValidation` middleware.
 - **Writes return their events.** An endpoint that changes state returns a tuple of the HTTP result and the event(s), for example `(Created<AnswerDto>, AnswerPosted)`. Wolverine publishes the returned event as a cascading message; with the outbox enabled it is stored in the same transaction as the EF Core changes. Endpoints do not inject `IMessageBus` unless they need something cascading cannot do (for example scheduling).
   - **Not yet, in build step 3.** There is no messaging and no `Cortex.Contracts` until step 4, so step 3 writes return only the HTTP result and call `db.SaveChangesAsync(ct)` themselves. Step 4 adds the event to the return tuple and removes the explicit save in favour of Wolverine's EF Core transaction middleware. The cost is touching each write endpoint twice; the benefit is seeing exactly what the middleware takes over.
@@ -124,7 +124,7 @@ public static class GetQuestionEndpoint
     [Tags("Questions")]
     [WolverineGet("/api/questions/{id}")]
     public static async Task<Results<Ok<QuestionDto>, NotFound>> Get(
-        Guid id, QuestionsDbContext db, CancellationToken ct)
+        Guid id, QuestionDbContext db, CancellationToken ct)
     {
         var question = await db.Questions.FindAsync([id], ct);
         return question is null ? TypedResults.NotFound() : TypedResults.Ok(question.ToDto());
@@ -140,7 +140,7 @@ public static class PostAnswerEndpoint
 {
     // Runs first; returning a non-null IResult stops the request
     public static async Task<(Question?, IResult)> LoadAsync(
-        Guid questionId, QuestionsDbContext db, CancellationToken ct)
+        Guid questionId, QuestionDbContext db, CancellationToken ct)
     {
         var question = await db.Questions.FindAsync([questionId], ct);
         return question is null
@@ -152,7 +152,7 @@ public static class PostAnswerEndpoint
     [Tags("Answers")]
     [WolverinePost("/api/questions/{questionId}/answers")]
     public static (Created<AnswerDto>, AnswerPosted) Post(
-        PostAnswer cmd, Question question, CurrentUser user, QuestionsDbContext db)
+        PostAnswer cmd, Question question, CurrentUser user, QuestionDbContext db)
     {
         var answer = question.AddAnswer(cmd.Body, user.Id);
         db.Answers.Add(answer);   // saved by Wolverine's EF Core transaction middleware
@@ -170,21 +170,33 @@ Stays short:
 ```csharp
 builder.AddServiceDefaults();
 builder.Services.AddOpenApi();
-builder.AddCortexAuth();       // Keycloak JWT bearer + policies, from ServiceDefaults
-builder.Services.AddQuestionServiceData(builder.Configuration);
+builder.AddCortexAuth();            // Keycloak JWT bearer + policies, from ServiceDefaults
+builder.AddQuestionServiceData();   // QuestionDbContext through Aspire's Npgsql integration
+builder.Services.AddCurrentUser();
 
-builder.Host.UseWolverine(opts => opts.ConfigureQuestionService(builder.Configuration));
+builder.Host.UseWolverine(opts => opts.ConfigureQuestionService());
 builder.Services.AddWolverineHttp();
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    await app.ApplyMigrationsAsync();   // Development only; elsewhere migrations are a deploy step
+}
+
+app.UseHttpsRedirection();
 app.MapDefaultEndpoints();     // /health and /alive from ServiceDefaults, needed by Aspire
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapWolverineEndpoints();   // discovers every [WolverineGet/Post/...] in the assembly
 ```
 
-Today `Program.cs` still configures Wolverine inline (`opts.UseRuntimeCompilation()`); the extension methods above arrive with build step 3.
+Notes on the extension methods (all in `Infrastructure/`):
+- `AddQuestionServiceData()` extends the host builder rather than `IServiceCollection`, because Aspire's `AddNpgsqlDbContext` does (it needs configuration plus the health check and telemetry builders). It also turns on `UseSnakeCaseNamingConvention()`.
+- `ConfigureQuestionService()` takes no `IConfiguration` yet; add the parameter when RabbitMQ needs a connection.
+- `CurrentUser` is a scoped class with a plain constructor over `IHttpContextAccessor` (no factory lambda), so Wolverine's generated endpoint code can construct it directly. `CurrentUser.Id` throws when the request has no authenticated user, so an endpoint missing `[Authorize]` fails loudly.
+- A failed migration stops the service from starting. That is intended: a service running without its schema fails later and less clearly.
 
 `ConfigureQuestionService` (in `Infrastructure/WolverineSetup.cs`) grows in stages:
 1. **Endpoints only:** runtime compilation (`WolverineFx.RuntimeCompilation`, needed for Wolverine 6 to start) and nothing else beyond the defaults. Handler and endpoint discovery covers the service assembly. Endpoints save with an explicit `SaveChangesAsync`.
@@ -204,25 +216,32 @@ Entities (all inside the service boundary): `Questions`, `Answers`, `QuestionVot
 
 **Keys and user references**
 - Primary keys are version 7 GUIDs created in the domain (`Guid.CreateVersion7()`). They are time-ordered, which keeps index inserts sequential, and the ID is known before the row is saved (needed for the `Created` location now and for events later).
-- Author and voter columns (`UserId`) hold the Keycloak `sub` claim as a string, with no FK: users live in Keycloak, outside the service boundary.
+- Author and voter columns (`author_id`, `voter_id`) hold the Keycloak `sub` claim as a string, with no FK: users live in Keycloak, outside the service boundary. They are `varchar(255)` (`UserIdRules.MaxLength`, the OpenID Connect limit for `sub`), so nothing assumes the id is a GUID.
+
+**Naming**
+- `EFCore.NamingConventions` (`UseSnakeCaseNamingConvention()`) names columns, keys, indexes and FKs, so nothing needs quoting in Postgres and configurations do not repeat `HasColumnName`.
+- Spelled out by hand: table names, the id columns (`question_id`, `answer_id`, `tag_id`, so an id reads the same in its own table and in the tables that reference it), the check constraints, and two constraint names the convention makes unreadable (`ak_answers_question_id_answer_id`, `fk_questions_accepted_answer`).
+- The join table's FKs are named in `UsingEntity`; the default would be the plural `questions_id` / `tags_id`.
 
 **Relationships**
 - Questions 1 — N Answers (composition; answers cannot exist without their question).
 - Questions 1 — N QuestionVotes, Answers 1 — N AnswerVotes (composition).
-- Questions N — N Tags through `QuestionTags`.
+- Questions N — N Tags through `question_tags` (`question_id`, `tag_id`), with navigations on both sides and no join class. `tags.slug` has a unique index.
 - Questions to Books: dashed reference by ID only. Books `0..1` — `0..N` Questions (a question references zero or one book; a book can have zero or many questions). Books live outside the service boundary.
 - Questions to Answers, accepted answer: optional association, `0..1` on both ends.
 
 **Votes**
-- `question_votes`: `QuestionId` (FK), `UserId` (Keycloak id, no FK), `Value`, `CreatedAt`. PK (`QuestionId`, `UserId`).
-- `answer_votes`: `AnswerId` (FK), `UserId`, `Value`, `CreatedAt`. PK (`AnswerId`, `UserId`).
-- `Value` is `smallint` with `CHECK (Value IN (-1, 1))`. Retracting a vote deletes the row; flipping a vote updates `Value`.
+- `question_votes`: `question_id` (FK), `voter_id` (Keycloak id, no FK), `value`, `created_at`. PK (`question_id`, `voter_id`).
+- `answer_votes`: `answer_id` (FK), `voter_id`, `value`, `created_at`. PK (`answer_id`, `voter_id`).
+- `value` is `smallint` with `CHECK (value IN (-1, 1))`, and the domain rejects any other value first. Retracting a vote deletes the row; flipping a vote updates `value`.
 - Two tables rather than one polymorphic table so each has a real FK with cascade delete.
 - Score is `SUM(Value)` at first. If sorting by top gets slow, add a denormalized `Score` column on Questions and Answers, updated when a vote is cast (a natural point to publish `VoteCast`).
 
 **Accepted answer**
 - One accepted answer per question: nullable `AcceptedAnswerId` on Questions. No `IsAccepted` flag on Answers (two sources of truth would drift).
-- Integrity: composite FK (`Id`, `AcceptedAnswerId`) → Answers (`QuestionId`, `Id`), which requires a unique constraint on Answers (`QuestionId`, `Id`). The column is nullable because the two tables reference each other: insert the question first, set the accepted answer afterward. Validating in the handler is an acceptable fallback if the composite FK feels heavy.
+- Integrity: composite FK (`question_id`, `accepted_answer_id`) → `answers` (`question_id`, `answer_id`). `answers` keeps `answer_id` alone as its primary key (so `answer_votes` can reference it with one column) and has (`question_id`, `answer_id`) as an alternate key for this FK to target. The column is nullable because the two tables reference each other: insert the question first, set the accepted answer afterward.
+- The FK is `ON DELETE RESTRICT`. With `CASCADE`, deleting the accepted answer would delete its question. `Question.RemoveAnswer` clears `AcceptedAnswerId` first.
+- There is no `AcceptedAnswer` navigation on `Question`, only the id, so there is a single source of truth.
 - Reads: load the question's answers and sort the accepted one first (`ORDER BY (Id = q.AcceptedAnswerId) DESC, Score DESC`); compute `isAccepted` per answer in the DTO. Lists use `AcceptedAnswerId IS NOT NULL` for the "answered" check.
 - If multiple accepted answers were ever wanted, flip the design: `IsAccepted` on Answers and drop the column on Questions.
 
