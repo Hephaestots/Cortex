@@ -3,7 +3,7 @@
 Last updated: 2026-11-13. Update this file when a milestone lands or a decision changes.
 
 ## Where things stand
-- **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import), Postgres (`postgres` server, `postgres-data` volume, database `questions-db`) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
+- **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import), Postgres (`postgres` server on fixed port 5432, `postgres-data` volume, database `questions-db`, with pgAdmin) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
 - The question service registers `QuestionDbContext` against `ConnectionStrings:questions-db` (Aspire's Npgsql EF Core integration, snake case naming via `EFCore.NamingConventions`) and applies pending migrations at startup in Development.
 - **Keycloak** realm `cortex` is imported from `src/Cortex.AppHost/Realms/cortex-realm.json` and working end to end.
 - **ServiceDefaults** holds the Aspire defaults plus `AddCortexAuth()` (Keycloak JWT bearer, audience `cortex-api`, `roles` role claim, `AdminOnly` policy).
@@ -62,8 +62,7 @@ Three gaps to close as part of it (nothing else is left over from items 4 and 5)
 - **`WolverineFx.Http.FluentValidation` is not installed.** The conventions call for it for request validation; the project references only `WolverineFx.Http` and `WolverineFx.RuntimeCompilation`.
 
 ## Repository state
-- Items 1 to 3 are on `main`. Items 4 and 5 are committed on the local branch `step3-items-4-5` (item 5 first, then item 4, because the registration needs the context and its entities). The branch is not pushed or merged.
-- Uncommitted in the working tree: a change to `src/Cortex.AppHost/AppHost.cs` (fixed Postgres port 5432 and `WithPgAdmin()`).
+- Items 1 to 5 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). There are no open branches.
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
