@@ -8,8 +8,9 @@ var keycloak = builder
 // One Postgres server for the whole dev environment, one database per service.
 // The volume keeps data across restarts; delete it to start from an empty server.
 var postgres = builder
-    .AddPostgres("postgres")
-    .WithDataVolume("postgres-data");
+    .AddPostgres("postgres", port: 5432)
+    .WithDataVolume("postgres-data")
+    .WithPgAdmin();
 
 // The resource name is also the connection string name the service reads
 // (ConnectionStrings:questions-db).
@@ -22,4 +23,4 @@ var questionService = builder
     .WithReference(questionsDb)
     .WaitFor(questionsDb);
 
-builder.Build().Run();
+builder.Build().Run();
