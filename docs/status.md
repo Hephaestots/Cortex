@@ -29,7 +29,7 @@ Each item is one small commit.
 3. ~~Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.~~ Done.
 4. ~~EF Core skeleton: `Data/QuestionDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.~~ Done.
 5. ~~Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.~~ Done, and `Tag`, `QuestionVote` and `AnswerVote` were pulled forward into the same migration.
-6. Question slices: ~~`CreateQuestion`~~ (done, uncommitted), `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
+6. Question slices: ~~`CreateQuestion`~~ (done), `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
    - ~~**6.1 Seed the starting tags.**~~ Done. A question needs 1 to 5 tags and there is no endpoint that creates tags until step 5 of the build order, so `CreateQuestion` cannot succeed against an empty `tags` table. The list lives in `Data/TagSeed.cs` and is inserted through EF Core's `UseSeeding` / `UseAsyncSeeding` hooks, which `MigrateAsync` runs: insert-missing by slug, never updating existing rows.
 7. Answer slices: `PostAnswer`, `UpdateAnswer`, `DeleteAnswer`, then `AcceptAnswer` (question author only).
 8. A `.http` file that exercises each endpoint with a `cortex-dev-tools` token; update this file.
@@ -56,9 +56,9 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - `MeEndpoint` takes `CurrentUser` as its parameter, so it doubles as a live check that the injection works.
 
 ## Question slices (2026-11-14)
-`CreateQuestion` is written and tested by hand; nothing below is committed yet.
+`CreateQuestion` is written, tested by hand and on `main` (commit `51f91e6`).
 
-- **Slice:** `Features/Questions/CreateQuestion.cs` holds `CreateQuestionRequest(Title, Body, BookId?, TagSlugs)`, its nested `CreateQuestionValidator`, `CreateQuestionResponse` (with a `From(Question)` mapper) and the endpoint. The author id and display name come from `CurrentUser`, never from the body. The file also holds `ValidationExtensions.WithError(DomainError)`, which sets a rule's code and message from a domain error; move it to `Infrastructure/` when a second slice needs it.
+- **Slice:** `Features/Questions/CreateQuestion.cs` holds `CreateQuestionRequest(Title, Body, BookId?, TagSlugs)`, its nested `CreateQuestionValidator`, `CreateQuestionResponse` (with a `From(Question)` mapper) and the endpoint. The author id and display name come from `CurrentUser`, never from the body. Rules take their code and message from a domain error through `WithError(DomainError)` in `Infrastructure/ValidationExtensions.cs`, shared by every slice.
 - **Tags are sent as slugs.** The endpoint normalises them with `Tag.Normalize` (now public), loads the matching tags (tracked, so EF only writes the join rows) and returns a 400 `ValidationProblem` naming each unknown slug.
 - **Validation:** `WolverineFx.Http.FluentValidation` 6.64.0, enabled by `opts.UseFluentValidation()` in `WolverineSetup` and `opts.UseFluentValidationProblemDetailMiddleware()` on `MapWolverineEndpoints`. Rules reuse the domain's length constants and `DomainError` messages. Existence checks stay in the endpoint, because a validator with injected services pushes Wolverine towards service location.
 - **Domain errors over HTTP:** `DomainError` has a `Kind` (`DomainErrorKind`: `Validation`, the default, `Forbidden`, `Conflict`). `Infrastructure/DomainExceptionHandler` (an `IExceptionHandler`) maps it to 400 / 403 / 409 and writes a `ProblemDetails` with the message in `detail` and the code in the `code` extension. Registered by `services.AddErrorHandling()` (which also calls `AddProblemDetails()`), with `app.UseExceptionHandler()` first in the pipeline. Only `question.invalid_user` is `Forbidden` so far; nothing uses `Conflict` yet.
@@ -70,7 +70,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion` (with the `CanBeEditedBy` check) and `DeleteQuestion`. `CreateQuestionResponse` will probably become a shared `QuestionResponse` once `GetQuestion` returns the same shape.
 
 ## Repository state
-- Items 1 to 5 and item 6.1 (tag seeding, with the question service health check in the AppHost) are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). There are no open branches. The `CreateQuestion` work of 2026-11-14 is uncommitted in the working tree.
+- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). There are no open branches.
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
@@ -113,6 +113,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **FluentValidation error codes do not reach the client:** Wolverine's problem-details middleware emits only property names and messages, so the message is all a client gets from a validator failure. Codes only appear in `DomainExceptionHandler` responses.
 - **FluentValidation keeps running a rule chain after a failure:** `NotNull().Must(x => x.Count ...)` throws on null. Use `.Cascade(CascadeMode.Stop)` or a null-safe predicate.
 - **Validation error keys are the C# property names** (`TagSlugs`, not `tagSlugs`). A hand-built `ValidationProblem` should use `nameof(...)` so both 400s agree.
+- **The validator answers before the domain is reached:** the FluentValidation middleware short-circuits the request, so a request that breaks both a validator rule and a rule only the domain checks returns only the validator's errors (seen 2026-11-14: six tags plus an empty title, with the title rule disabled, reported only the tag count). The domain error appears once the validator passes.
 
 ## Known leftovers
 - An unused `using Microsoft.Extensions.DependencyInjection.Extensions;` in `Infrastructure/ServiceCollectionExtensions.cs`.

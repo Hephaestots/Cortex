@@ -1,4 +1,3 @@
-using Cortex.QuestionService.Common;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Infrastructure;
@@ -120,11 +119,4 @@ public sealed record CreateQuestionResponse(
         question.BookId,
         [.. question.Tags.Select(t => t.Slug)],
         question.CreatedAt);
-}
-
-internal static class ValidationExtensions
-{
-    public static IRuleBuilderOptions<T, TProperty> WithError<T, TProperty>(
-        this IRuleBuilderOptions<T, TProperty> rule, DomainError error) =>
-        rule.WithErrorCode(error.Code).WithMessage(error.Message);
 }
