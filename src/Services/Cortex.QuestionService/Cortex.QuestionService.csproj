@@ -16,6 +16,7 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="WolverineFx.Http" Version="6.64.0" />
+        <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.64.0" />
         <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.64.0" />
     </ItemGroup>
 

@@ -1,6 +1,18 @@
 namespace Cortex.QuestionService.Common;
 
-public sealed record DomainError(string Code, string Message);
+public enum DomainErrorKind
+{
+    /// <summary> The input breaks a rule: empty, too long, out of range, etc. </summary>
+    Validation,
+    
+    /// <summary> The caller is not allowed to do this to this entity. </summary>
+    Forbidden,
+    
+    /// <summary> This input is fine, but the entity's current state rules it out. </summary>
+    Conflict
+}
+
+public sealed record DomainError(string Code, string Message, DomainErrorKind Kind = DomainErrorKind.Validation);
 
 public class DomainException : Exception
 {

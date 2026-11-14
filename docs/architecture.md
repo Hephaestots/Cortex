@@ -193,7 +193,7 @@ app.MapWolverineEndpoints();   // discovers every [WolverineGet/Post/...] in the
 ```
 
 Notes on the extension methods (all in `Infrastructure/`):
-- `AddQuestionServiceData()` extends the host builder rather than `IServiceCollection`, because Aspire's `AddNpgsqlDbContext` does (it needs configuration plus the health check and telemetry builders). It also turns on `UseSnakeCaseNamingConvention()`.
+- `AddQuestionServiceData()` extends the host builder rather than `IServiceCollection`, because it needs the configuration and Aspire's `EnrichNpgsqlDbContext` needs the health check and telemetry builders. It registers the context with plain `AddDbContext` and singleton options, not Aspire's `AddNpgsqlDbContext`: that one uses a factory lambda, which forces Wolverine into service location, and Wolverine 6 rejects that by default (see "Gotchas already hit" in `docs/status.md`). It also turns on `UseSnakeCaseNamingConvention()`.
 - `ConfigureQuestionService()` takes no `IConfiguration` yet; add the parameter when RabbitMQ needs a connection.
 - `CurrentUser` is a scoped class with a plain constructor over `IHttpContextAccessor` (no factory lambda), so Wolverine's generated endpoint code can construct it directly. `CurrentUser.Id` throws when the request has no authenticated user, so an endpoint missing `[Authorize]` fails loudly.
 - A failed migration stops the service from starting. That is intended: a service running without its schema fails later and less clearly.

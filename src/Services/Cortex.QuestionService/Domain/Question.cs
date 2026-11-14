@@ -48,11 +48,12 @@ public sealed class Question
         SetContent(title, body);
         SetTags(tags);
     }
+    
+    public bool CanBeEditedBy(string userId, bool isModerator) =>
+        isModerator || AuthorId == userId;
 
-    public void Edit(string title, string body, IEnumerable<Tag> tags, string editorId, DateTimeOffset now)
+    public void Edit(string title, string body, IEnumerable<Tag> tags, DateTimeOffset now)
     {
-        EnsureAuthor(editorId);
-        
         SetContent(title, body);
         SetTags(tags);
         
@@ -153,7 +154,7 @@ public sealed class Question
             throw new DomainException(Errors.InvalidAnswer);
     }
 
-    private static class Errors
+    internal static class Errors
     {
         public static readonly DomainError NullAnswer =
             new("question.null_answer", "The answer must not be null.");
@@ -192,7 +193,7 @@ public sealed class Question
             new("question.invalid_answer", "The answer doesn't belong to this question.");
         
         public static readonly DomainError InvalidUser =
-            new("question.invalid_user", "Only the author is allowed to do this operation.");
+            new("question.invalid_user", "Only the author is allowed to do this operation.", DomainErrorKind.Forbidden);
         
         public static readonly DomainError TagsOutOfRange =
             new("question.tags_out_of_range", $"A question needs between 1 and {MaxTags} tags.");

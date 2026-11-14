@@ -1,4 +1,5 @@
 using Wolverine;
+using Wolverine.FluentValidation;
 
 namespace Cortex.QuestionService.Infrastructure;
 
@@ -12,6 +13,7 @@ public static class WolverineSetup
     {
         // Wolverine 6 does not start without this (see "Gotchas" in docs/status.md).
         opts.UseRuntimeCompilation();
+        opts.UseFluentValidation();
 
         // Build step 4 adds here: EF Core transactions, the Postgres outbox and RabbitMQ routing.
         return opts;

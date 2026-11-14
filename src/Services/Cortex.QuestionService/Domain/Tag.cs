@@ -43,10 +43,10 @@ public sealed class Tag
         Description = description;
     }
 
-    private static string Normalize(string slug) =>
+    public static string Normalize(string slug) =>
         slug.Trim().ToLowerInvariant().Replace(' ', '-');
 
-    private static class Errors
+    internal static class Errors
     {
         public static readonly DomainError NameTooLong =
             new("tag.name_too_long", $"The tag name exceeds {MaxNameLength} characters.");

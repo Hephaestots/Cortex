@@ -1,7 +1,9 @@
 using Cortex.QuestionService.Infrastructure;
 using Cortex.ServiceDefaults;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Wolverine;
 using Wolverine.Http;
+using Wolverine.Http.FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +12,8 @@ builder.Services.AddOpenApi();
 builder.AddCortexAuth();
 builder.AddQuestionServiceData();
 builder.Services.AddCurrentUser();
+builder.Services.AddErrorHandling();
+builder.Services.TryAddSingleton(TimeProvider.System);
 
 builder.Host.UseWolverine(opts => opts.ConfigureQuestionService());
 builder.Services.AddWolverineHttp();
@@ -22,10 +26,14 @@ if (app.Environment.IsDevelopment())
     await app.ApplyMigrationsAsync();
 }
 
+app.UseExceptionHandler();
+
 app.UseHttpsRedirection();
 app.MapDefaultEndpoints();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapWolverineEndpoints();
+
+app.MapWolverineEndpoints(opts => 
+    opts.UseFluentValidationProblemDetailMiddleware());
 
 app.Run();
