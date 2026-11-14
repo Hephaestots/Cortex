@@ -29,6 +29,7 @@ Each item is one small commit.
 4. ~~EF Core skeleton: `Data/QuestionDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.~~ Done.
 5. ~~Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.~~ Done, and `Tag`, `QuestionVote` and `AnswerVote` were pulled forward into the same migration.
 6. Question slices: `CreateQuestion`, `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
+   - **6.1 Seed the starting tags** (do this first). A question needs 1 to 5 tags and there is no endpoint that creates tags until step 5 of the build order, so `CreateQuestion` cannot succeed against an empty `tags` table. The list lives in `Data/TagSeed.cs` and is inserted through EF Core's `UseSeeding` / `UseAsyncSeeding` hooks, which `MigrateAsync` runs: insert-missing by slug, never updating existing rows.
 7. Answer slices: `PostAnswer`, `UpdateAnswer`, `DeleteAnswer`, then `AcceptAnswer` (question author only).
 8. A `.http` file that exercises each endpoint with a `cortex-dev-tools` token; update this file.
 
@@ -56,6 +57,8 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 ## Next up: item 6, question slices
 `CreateQuestion`, `GetQuestion`, `ListQuestions`, `UpdateQuestion`, `DeleteQuestion`, using `CurrentUser` and an explicit `SaveChangesAsync`.
 
+**6.1, tag seeding, is implemented** (`Data/TagSeed.cs` holds the list, `Data/TagSeeder.cs` inserts it, hooked up in `AddQuestionServiceData`). Verified on 2026-11-13 under the AppHost: the first start inserted the 32 tags, a restart left the count at 32, and two tags deleted by hand were re-inserted on the next start. The synchronous `Seed` path (used by `dotnet ef database update`) has not been run. `Tag` now checks the slug length after normalising it.
+
 Three gaps to close as part of it (nothing else is left over from items 4 and 5):
 - **Admins cannot edit a question.** The plan says "only the author or an admin may change a question", but `Question.Edit` calls `EnsureAuthor`, which rejects everyone except the author.
 - **A `DomainException` becomes a 500.** Nothing maps it to an HTTP response yet, so a rule such as "title too long" would return a server error instead of a 400 carrying the error code.
@@ -79,6 +82,7 @@ Three gaps to close as part of it (nothing else is left over from items 4 and 5)
 - **Auth:** both the gateway and the services validate JWTs. The unused `Auth:Authority` / `Auth:Audience` settings were deleted.
 
 ## Decisions taken for the data layer (2026-11-13)
+- **Tags are seeded with `UseSeeding` / `UseAsyncSeeding`, not `HasData`:** `HasData` needs hard-coded keys (tag ids are generated in the domain) and turns every wording change into a migration. Open point: startup migration is Development-only, so a production deploy must run `Migrate` or `dotnet ef database update` for the seed to apply.
 - **Snake case by convention** (`EFCore.NamingConventions`) instead of naming every column by hand; id columns stay explicit so they read the same in every table.
 - **Composite FK for the accepted answer** was kept (the handler-validation fallback in `docs/architecture.md` was not needed), with `RESTRICT` so deleting an answer can never delete its question.
 - **No `AcceptedAnswer` navigation:** the id is the single source of truth.
@@ -94,6 +98,7 @@ Three gaps to close as part of it (nothing else is left over from items 4 and 5)
 - **Checking the EF model without a database:** from the service folder, `env "ConnectionStrings__questions-db=Host=localhost;Database=x;Username=x;Password=x" dotnet ef dbcontext script` builds the model and prints the schema. Without the dummy connection string the design-time host fails.
 - **A collection navigation with no inverse is one-to-many by convention:** `Question.Tags` needed an explicit `HasMany().WithMany()`, and explicit FK names in `UsingEntity` to get `tag_id` instead of `tags_id`.
 - **A new endpoint needs a restart:** an endpoint file added while the AppHost was running under `aspire start` returned 404 until the AppHost was restarted.
+- **A project resource needs `WithHttpHealthCheck` for `aspire wait` to mean "ready":** without one, "healthy" only means the process started, and a script that queried the database right after `aspire wait question-service` saw the state from before migrations and seeding. The question service now has `.WithHttpHealthCheck("/health")` in the AppHost (verified 2026-11-13: the wait returns after the service is listening). Give every new service the same.
 - **Postgres password and volume go together:** Aspire generates the Postgres password once and keeps it in the AppHost's user secrets, while the data lives in the `postgres-data` volume. If one is reset without the other, logins fail; delete the volume to start clean.
 
 ## Known leftovers

@@ -21,6 +21,9 @@ var questionService = builder
     .WithReference(keycloak)
     .WaitFor(keycloak)
     .WithReference(questionsDb)
-    .WaitFor(questionsDb);
+    .WaitFor(questionsDb)
+    // Without this, "healthy" only means the process started. /health (mapped by
+    // MapDefaultEndpoints) answers once migrations and seeding are done and the app listens.
+    .WithHttpHealthCheck("/health");
 
 builder.Build().Run();

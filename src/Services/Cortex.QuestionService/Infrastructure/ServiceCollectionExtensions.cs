@@ -19,7 +19,10 @@ public static class ServiceCollectionExtensions
         // Snake case covers every name EF generates itself (keys, indexes, join tables), so
         // nothing needs quoting in Postgres. Explicit HasColumnName / HasConstraintName still win.
         builder.AddNpgsqlDbContext<QuestionDbContext>("questions-db",
-            configureDbContextOptions: options => options.UseSnakeCaseNamingConvention());
+            configureDbContextOptions: options => options
+                .UseSnakeCaseNamingConvention()
+                .UseSeeding((context, _) => TagSeeder.Seed(context))
+                .UseAsyncSeeding((context, _, ct) => TagSeeder.SeedAsync(context, ct)));
 
         return builder;
     }
