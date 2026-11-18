@@ -122,15 +122,21 @@ src/Services/Cortex.QuestionService/
 ### Example use-case files
 A read:
 ```csharp
-public static class GetQuestionEndpoint
+public static class GetQuestionByIdEndpoint
 {
     [Tags("Questions")]
     [WolverineGet("/api/questions/{id}")]
-    public static async Task<Results<Ok<QuestionDto>, NotFound>> Get(
+    public static async Task<Results<Ok<QuestionDetail>, NotFound>> Get(
         Guid id, QuestionDbContext db, CancellationToken ct)
     {
-        var question = await db.Questions.FindAsync([id], ct);
-        return question is null ? TypedResults.NotFound() : TypedResults.Ok(question.ToDto());
+        // An inline EF projection, not FindAsync plus a mapper: only the needed columns are
+        // read, aggregates run in SQL, and nothing is tracked.
+        var question = await db.Questions
+            .Where(q => q.Id == id)
+            .Select(q => new QuestionDetail(q.Id, q.Title, q.Body /* ... */))
+            .FirstOrDefaultAsync(ct);
+
+        return question is null ? TypedResults.NotFound() : TypedResults.Ok(question);
     }
 }
 ```

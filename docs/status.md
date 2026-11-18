@@ -13,6 +13,7 @@ Last updated: 2026-11-18. Update this file when a milestone lands or a decision 
   - `GET /api/admin/ping`: `[Authorize(Policy = Policies.AdminOnly)]` (the policy requires the `admin` role). Verified 401 without a token, 403 as `user`, 200 as `admin`.
   - `POST /api/questions`: `[Authorize]`, creates a question for the caller and returns 201 with a `Location` header.
   - `GET /api/questions`: public, newest first, offset paging, optional AND filter on tags (see "Read slices" below).
+  - `GET /api/questions/{id}`: public, one question with its body, 404 when it does not exist (see "Read slices" below).
 - **Not started:** `Cortex.Contracts`, the gateway, the Profiles service, `web/`, `tests/`.
 
 ## Build order progress
@@ -30,7 +31,7 @@ Each item is one small commit.
 3. ~~Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.~~ Done.
 4. ~~EF Core skeleton: `Data/QuestionDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.~~ Done.
 5. ~~Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.~~ Done, and `Tag`, `QuestionVote` and `AnswerVote` were pulled forward into the same migration.
-6. Question slices: ~~`CreateQuestion`~~ (done), ~~`GetQuestions`~~ (done; was `ListQuestions`, and also covers "questions by tag" through `?tags=`), `GetQuestionById` (was `GetQuestion`), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
+6. Question slices: ~~`CreateQuestion`~~ (done), ~~`GetQuestions`~~ (done; was `ListQuestions`, and also covers "questions by tag" through `?tags=`), ~~`GetQuestionById`~~ (done; was `GetQuestion`), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
    - ~~**6.1 Seed the starting tags.**~~ Done. A question needs 1 to 5 tags and there is no endpoint that creates tags until step 5 of the build order, so `CreateQuestion` cannot succeed against an empty `tags` table. The list lives in `Data/TagSeed.cs` and is inserted through EF Core's `UseSeeding` / `UseAsyncSeeding` hooks, which `MigrateAsync` runs: insert-missing by slug, never updating existing rows.
 7. Answer slices: `PostAnswer`, `UpdateAnswer`, `DeleteAnswer`, then `AcceptAnswer` (question author only).
 8. A `.http` file that exercises each endpoint with a `cortex-dev-tools` token; update this file.
@@ -68,7 +69,9 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **DbContext registration** changed to `AddDbContext` plus `EnrichNpgsqlDbContext`; see "Gotchas already hit".
 
 ## Read slices (2026-11-18)
-`GetQuestions` is written, tested by hand and committed (see "Repository state").
+`GetQuestions` is written, tested by hand and committed. `GetQuestionById` is written and builds, not committed yet (see "Repository state").
+
+### `GetQuestions`
 
 - **One list endpoint with filters, not one endpoint per filter.** "Questions by tag" is `GET /api/questions?tags=x`, not `/api/tags/{slug}/questions`. A tag narrows the same collection, filters combine (`?bookId=`, `?sort=` later), and it is what the Stack Exchange and GitHub APIs do. Nested routes are kept for real ownership (`/api/questions/{id}/answers`). A tag page that needs the tag's own data (name, description, a 404 for an unknown tag) will call `GET /api/tags/{slug}` from the tags slice.
 - **Tags filter:** repeated keys (`?tags=a&tags=b`), combined with **AND** (a question must have all of them), normalised with `Tag.Normalize`, duplicates and empty values dropped, at most `Question.MaxTags` (5: with AND, more can never match). Implemented as one `Where(q => q.Tags.Any(t => t.Slug == slug))` per tag, which becomes one `EXISTS` each and uses `ix_question_tags_tag_id`. An unknown tag gives an empty page. Comma-separated values are not split: `?tags=a,b` is the single tag `"a,b"`.
@@ -80,11 +83,21 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **Reads are public:** no `[Authorize]`, and they must not take `CurrentUser` (it throws without a user).
 - **`ViewCount` is not incremented on GET** (open point): a read that writes breaks safe and cacheable GETs. Candidate later: an event, or a separate endpoint.
 
+### `GetQuestionById`
+- **First endpoint with a 404:** `GET /api/questions/{id}` returns `Results<Ok<QuestionDetail>, NotFound>`. The list endpoint has no 404, because an empty page does not mean anything is missing; one question that does not exist does.
+- **One method, no Load/Handle split:** the split is for endpoints that load an entity and then act on it (update, delete, post answer). In a read, the projection is the load.
+- **Projection with `Where(...).Select(...).FirstOrDefaultAsync`**, not `FindAsync`: `FindAsync` loads the tracked entity without its tags or votes, so `Score` and the tag list could not be computed in SQL.
+- **Its own response record, `QuestionDetail`, not `QuestionSummary`:** a list row and a detail page change for different reasons. `QuestionDetail` adds `Body`, `AuthorId` (the client compares it with the token's `sub` to show Edit, and later Accept), `ViewCount`, `UpdatedAt` (to show "edited"), and `AcceptedAnswerId` instead of `HasAcceptedAnswer` (a detail page must know *which* answer to mark). `QuestionSummary` stays in `GetQuestions.cs`, its only user.
+- **No answers yet (decided 2026-11-18):** they come with the Answers slice (item 7), which first has to settle three things:
+  - **Ordering.** Without an `OrderBy`, Postgres returns answers in any order, and the order can change between requests. Candidate: accepted first, then score, then `CreatedAt`.
+  - **Author name.** `Answer` has only `AuthorId`, with no `AuthorDisplayName` like `Question` has. Showing who answered needs a domain change and a migration.
+  - **Row multiplication.** Projecting two collections (tags and answers) in one query returns one row per tag × answer, each repeating the answer body. `.AsSplitQuery()` turns that into one query per collection; alternatively, answers get their own endpoint (`GET /api/questions/{id}/answers`).
+
 ## Next up: the rest of item 6
-`GetQuestionById` (`GET /api/questions/{id}`, `Results<Ok<QuestionDetail>, NotFound>`, projection with `FirstOrDefaultAsync`, no answers until the Answers slice), then `UpdateQuestion` (with the `CanBeEditedBy` check) and `DeleteQuestion`.
+`UpdateQuestion` (with the `CanBeEditedBy` check in a `Before` step, 403 otherwise) and `DeleteQuestion`.
 
 ## Repository state
-- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` is on the branch `feat/get-questions`, pushed and not merged yet.
+- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` is on `main` and pushed (`9c70bcb`). `GetQuestionById` is in the working tree on `main`, not committed.
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
@@ -96,6 +109,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - Verified on 2026-11-18 after the Aspire 17 upgrade and the AppHost migration: the solution builds with no warnings; under `aspire start`, Keycloak, Postgres, `questions-db` and the question service report healthy, the service keeps its launch-profile ports (7001 / 7002) and `/health` returns 200.
 - Verified by hand on 2026-11-18 against `GET /api/questions` (anonymous): `?pageSize=3` and `?page=2&pageSize=2` return the right slices, `totalCount` and `totalPages`; `?tags=fantasy&tags=horror` returns only the question with both; `?tags=Fantasy` matches `fantasy`; `?tags=` behaves like no filter; `?tags=nope` and `?tags=fantasy,horror` return an empty page; `?page=0`, `?pageSize=51`, `?page=99999999`, six tags and `?page=abc` return 400; `?PAGESIZE=1` works. Test questions named "PT ..." were left in the dev database.
 - Not verified: non-zero `Score` and `AnswersCount` in `GET /api/questions` (there are no vote or answer endpoints yet).
+- Verified by hand on 2026-11-18 against `GET /api/questions/{id}` (anonymous, first version of the endpoint): a malformed id (`abc`) returns 404. Not verified yet after the response was reworked into the current `QuestionDetail` (answers dropped, `AuthorId`, `AcceptedAnswerId` and `UpdatedAt` added): a 200 for an existing id, a 404 for an unknown GUID, and the new fields in the JSON. The service builds with no warnings.
 - Local Docker volumes in use: `keycloak-data`, `postgres-data`.
 
 ## Decisions taken for the Aspire 17 upgrade (2026-11-18)
@@ -139,6 +153,8 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **`abstract` on a request type breaks the endpoint at runtime** (hit 2026-11-18): Wolverine only binds a concrete type from the JSON body, so it looked for `CreateQuestionRequest` elsewhere and code generation failed with `UnResolvableVariableException` on the first request (500). It builds fine. Request and query types are `sealed`.
 - **`PagedResult` from `System.Linq.Dynamic.Core` is not ours** (hit 2026-11-18): the package comes in transitively through JasperFx, so the IDE offers its types. Its `PagedResult` holds an unexecuted `IQueryable` that the JSON serializer would run synchronously. Use `Features/Shared/PagedResponse<T>` with a materialised list.
 - **Unbounded `?page=` overflows `Skip`:** `(Page - 1) * PageSize` past `int.MaxValue` goes negative and `Skip` throws (500). `PagedQuery.MaxPage` caps it, so it is a 400.
+- **A malformed route id is a 404, not a 400** (seen 2026-11-18): `/api/questions/abc` does not parse as the endpoint's `Guid id`, so Wolverine treats the route as not matched and returns 404 without a `{id:guid}` constraint. It differs from query strings, where `?page=abc` is a 400 because of `RejectUnparseableQueryValues`. That fits REST (no resource has that id), but a client cannot tell "bad id" from "no such question".
+- **`Include` does nothing in a projection:** once a query ends in `Select(...)`, the projection decides what loads and EF ignores `Include`. A leftover `Include` before a `Select` only suggests the opposite of the projection rule.
 - **Validation error keys are the C# property names** (`TagSlugs`, not `tagSlugs`). A hand-built `ValidationProblem` should use `nameof(...)` so both 400s agree.
 - **The validator answers before the domain is reached:** the FluentValidation middleware short-circuits the request, so a request that breaks both a validator rule and a rule only the domain checks returns only the validator's errors (seen 2026-11-14: six tags plus an empty title, with the title rule disabled, reported only the tag count). The domain error appears once the validator passes.
 
