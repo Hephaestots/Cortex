@@ -42,6 +42,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddProblemDetails();
         services.AddExceptionHandler<DomainExceptionHandler>();
+        services.AddExceptionHandler<ConcurrencyExceptionHandler>();
 
         return services;
     }

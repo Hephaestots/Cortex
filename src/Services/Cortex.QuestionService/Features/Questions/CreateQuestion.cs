@@ -1,10 +1,10 @@
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
+using Cortex.QuestionService.Features.Shared;
 using Cortex.QuestionService.Infrastructure;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
 using Wolverine.Http;
 
 namespace Cortex.QuestionService.Features.Questions;
@@ -20,32 +20,18 @@ public static class CreateQuestionEndpoint
         TimeProvider timeProvider,
         CancellationToken ct)
     {
-        // Normalize the slugs passed through the HTTP request.
-        var normalizedSlugs = request.TagSlugs
-            .Select(Tag.Normalize)
-            .ToHashSet();
-        
-        // Load the existing tags based on the slugs.
-        var tags = await db.Tags.Where(tag => normalizedSlugs.Contains(tag.Slug)).ToListAsync(ct);
-        
-        // Finding missing tags.
-        var missing = normalizedSlugs.Except(tags.Select(t => t.Slug)).ToList();
-        
-        // Rejecting the missing tags, if any.
-        if (missing.Count != 0)
-            return TypedResults.ValidationProblem(
-                errors: new Dictionary<string, string[]>
-                {
-                    [nameof(CreateQuestionRequest.TagSlugs)] = [..missing.Select(s => $"Tag '{s}' does not exist.")]
-                });
-        
+        var lookup = await TagLookup.FindBySlugsAsync(db, request.TagSlugs, ct);
+
+        if (lookup.HasMissing)
+            return Problems.Validation(nameof(CreateQuestionRequest.TagSlugs), lookup.MissingMessages);
+
         var question = new Question(
             request.Title,
             request.Body,
             user.Id,
             user.DisplayName ?? throw new InvalidOperationException("User display name must not be null"),
             request.BookId,
-            tags,
+            lookup.Tags,
             timeProvider.GetUtcNow());
         
         db.Questions.Add(question);
@@ -106,7 +92,8 @@ public sealed record CreateQuestionResponse(
     string AuthorDisplayName,
     string? BookId,
     IReadOnlyList<string> TagSlugs,
-    DateTimeOffset CreatedAt)
+    DateTimeOffset CreatedAt,
+    uint Version)
 {
     public static CreateQuestionResponse From(Question question) => new(
         question.Id,
@@ -116,5 +103,7 @@ public sealed record CreateQuestionResponse(
         question.AuthorDisplayName,
         question.BookId,
         [.. question.Tags.Select(t => t.Slug)],
-        question.CreatedAt);
+        question.CreatedAt,
+        // Read back by EF from the INSERT, so the client can edit without a GET first.
+        question.Version);
 }

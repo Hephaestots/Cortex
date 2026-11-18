@@ -2,7 +2,7 @@ using Cortex.QuestionService.Common;
 
 namespace Cortex.QuestionService.Domain;
 
-public sealed class Question
+public sealed class Question : IVersioned
 {
     public const int MaxBodyLength = 5000;
     public const int MaxBookIdLength = 100;
@@ -24,6 +24,9 @@ public sealed class Question
     public Guid? AcceptedAnswerId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? UpdatedAt { get; private set; }
+
+    /// <summary>Set by the database on every update (Postgres <c>xmin</c>); see <see cref="IVersioned"/>.</summary>
+    public uint Version { get; private set; }
 
     public IReadOnlyCollection<Answer> Answers => _answers;
     public IReadOnlyCollection<Tag> Tags => _tags;

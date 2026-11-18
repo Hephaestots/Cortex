@@ -1,4 +1,3 @@
-using System.Net;
 using Cortex.QuestionService.Common;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -12,23 +11,17 @@ internal sealed class DomainExceptionHandler(IProblemDetailsService problemDetai
         if (exception is not DomainException { Error: var error })
             return false;
 
-        var statusCode = error.Kind switch
-        {
-            DomainErrorKind.Validation => HttpStatusCode.BadRequest,
-            DomainErrorKind.Forbidden => HttpStatusCode.Forbidden,
-            DomainErrorKind.Conflict => HttpStatusCode.Conflict,
-            _ => HttpStatusCode.InternalServerError
-        };
+        var statusCode = Problems.StatusCodeFor(error.Kind);
 
-        httpContext.Response.StatusCode = (int)statusCode;
-        
+        httpContext.Response.StatusCode = statusCode;
+
         return await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
             Exception = exception,
             ProblemDetails = new ProblemDetails
             {
-                Status = (int)statusCode,
+                Status = statusCode,
                 Detail = error.Message,
                 Extensions = { ["code"] = error.Code }
             }

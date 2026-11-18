@@ -30,6 +30,11 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.Property(question => question.BookId)
             .HasMaxLength(Question.MaxBookIdLength);
 
+        // Npgsql maps a uint row version to the xmin system column: no column is added, and every
+        // UPDATE or DELETE of a tracked question gets "AND xmin = <version it was loaded with>".
+        builder.Property(question => question.Version)
+            .IsRowVersion();
+
         // See "Accepted answer" in architecture.md. The composite FK
         // (question_id, accepted_answer_id) -> answers (question_id, answer_id)
         // guarantees the accepted answer belongs to this question.

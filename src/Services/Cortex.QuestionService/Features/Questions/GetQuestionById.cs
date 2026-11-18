@@ -34,7 +34,8 @@ public static class GetQuestionByIdEndpoint
                 question.Votes.Sum(vote => (int)vote.Value),
                 question.AcceptedAnswerId,
                 question.CreatedAt,
-                question.UpdatedAt))
+                question.UpdatedAt,
+                question.Version))
             .FirstOrDefaultAsync(ct);
 
         return question is null
@@ -45,7 +46,8 @@ public static class GetQuestionByIdEndpoint
 
 /// <summary>
 /// <see cref="AuthorId"/> lets the client compare it with the token's <c>sub</c> to show Edit;
-/// <see cref="AcceptedAnswerId"/> says which answer to mark, not only whether there is one.
+/// <see cref="AcceptedAnswerId"/> says which answer to mark, not only whether there is one;
+/// <see cref="Version"/> goes back with an edit (see <c>IVersioned</c>).
 /// </summary>
 public sealed record QuestionDetail(
     Guid Id,
@@ -60,4 +62,5 @@ public sealed record QuestionDetail(
     int Score,
     Guid? AcceptedAnswerId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? UpdatedAt);
+    DateTimeOffset? UpdatedAt,
+    uint Version);
