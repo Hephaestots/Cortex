@@ -27,19 +27,17 @@ public static class CreateQuestionEndpoint
         
         // Load the existing tags based on the slugs.
         var tags = await db.Tags.Where(tag => normalizedSlugs.Contains(tag.Slug)).ToListAsync(ct);
-
-        // Rejecting unknown tags.
-        if (tags.Count < normalizedSlugs.Count)
-        {
-            var existingSlugs = tags.Select(t => t.Slug).ToHashSet();
-            var missingSlugs = normalizedSlugs.Where(slug => !existingSlugs.Contains(slug));
-            
+        
+        // Finding missing tags.
+        var missing = normalizedSlugs.Except(tags.Select(t => t.Slug)).ToList();
+        
+        // Rejecting the missing tags, if any.
+        if (missing.Count != 0)
             return TypedResults.ValidationProblem(
-                errors: new Dictionary<string, string[]>()
+                errors: new Dictionary<string, string[]>
                 {
-                    [nameof(CreateQuestionRequest.TagSlugs)] = [..missingSlugs.Select(s => $"Tag '{s}' does not exist.")]
+                    [nameof(CreateQuestionRequest.TagSlugs)] = [..missing.Select(s => $"Tag '{s}' does not exist.")]
                 });
-        }
         
         var question = new Question(
             request.Title,
@@ -59,7 +57,7 @@ public static class CreateQuestionEndpoint
     }
 }
 
-public sealed record CreateQuestionRequest(
+public abstract record CreateQuestionRequest(
     string Title,
     string Body,
     string? BookId,

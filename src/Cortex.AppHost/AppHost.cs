@@ -17,8 +17,6 @@ var postgres = builder
 var questionsDb = postgres.AddDatabase("questions-db");
 
 var questionService = builder
-    // Path is relative to the AppHost folder. AddDotnetProject replaces AddProject<Projects.X>,
-    // which needed a ProjectReference to generate the type. It does not support watch mode yet.
     .AddDotnetProject("question-service", "../Services/Cortex.QuestionService/Cortex.QuestionService.csproj")
     .WithReference(keycloak)
     .WaitFor(keycloak)

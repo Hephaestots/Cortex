@@ -16,9 +16,4 @@
       <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="17.0.0" />
     </ItemGroup>
 
-    <!--
-      No ProjectReference to the services: AddDotnetProject takes a path (relative to this
-      folder) and builds the project itself, so there is no generated Projects.* type to feed.
-    -->
-
 </Project>
