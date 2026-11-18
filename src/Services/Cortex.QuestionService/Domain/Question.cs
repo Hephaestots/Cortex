@@ -195,6 +195,9 @@ public sealed class Question
         public static readonly DomainError InvalidUser =
             new("question.invalid_user", "Only the author is allowed to do this operation.", DomainErrorKind.Forbidden);
         
+        public static readonly DomainError EditForbidden =
+            new("question.edit_forbidden", "Only the author or an admin can edit this question.", DomainErrorKind.Forbidden);
+
         public static readonly DomainError TagsOutOfRange =
             new("question.tags_out_of_range", $"A question needs between 1 and {MaxTags} tags.");
     }

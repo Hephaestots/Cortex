@@ -66,7 +66,7 @@ src/Services/Cortex.QuestionService/
       CreateQuestion.cs           // request record, validator, endpoint class, response
       GetQuestions.cs             // list: offset paging, ?tags= filter (AND)
       GetQuestionById.cs
-      UpdateQuestion.cs
+      EditQuestion.cs
       DeleteQuestion.cs
       AcceptAnswer.cs
     Answers/

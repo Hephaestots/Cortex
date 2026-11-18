@@ -3,7 +3,7 @@
 Last updated: 2026-11-18. Update this file when a milestone lands or a decision changes.
 
 ## Where things stand
-- **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import), Postgres (`postgres` server on fixed port 5432, `postgres-data` volume, database `questions-db`, with pgAdmin) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
+- **AppHost** runs Keycloak (`https://localhost:6001`, `keycloak-data` volume, realm import), Postgres (`postgres` server on fixed port 5432, `postgres-data` volume, database `questions-db`, with pgAdmin) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
 - The question service registers `QuestionDbContext` against `ConnectionStrings:questions-db` (plain `AddDbContext` plus Aspire's `EnrichNpgsqlDbContext`, see "Gotchas already hit"; snake case naming via `EFCore.NamingConventions`) and applies pending migrations at startup in Development.
 - **Keycloak** realm `cortex` is imported from `src/Cortex.AppHost/Realms/cortex-realm.json` and working end to end.
 - **ServiceDefaults** holds the Aspire defaults plus `AddCortexAuth()` (Keycloak JWT bearer, audience `cortex-api`, `roles` role claim, `AdminOnly` policy).
@@ -15,6 +15,7 @@ Last updated: 2026-11-18. Update this file when a milestone lands or a decision 
   - `GET /api/questions`: public, newest first, offset paging, optional AND filter on tags (see "Read slices" below).
   - `GET /api/questions/{id}`: public, one question with its body, 404 when it does not exist (see "Read slices" below).
   - `GET /api/tags`: public, every tag as master data for the client (see "Tags master data" below).
+  - `PUT /api/questions/{id}`: `[Authorize]`, the author or an admin replaces the title, body and tags; 204 (see "EditQuestion" below).
 - **Not started:** `Cortex.Contracts`, the gateway, the Profiles service, `web/`, `tests/`.
 
 ## Build order progress
@@ -32,7 +33,7 @@ Each item is one small commit.
 3. ~~Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.~~ Done.
 4. ~~EF Core skeleton: `Data/QuestionDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.~~ Done.
 5. ~~Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.~~ Done, and `Tag`, `QuestionVote` and `AnswerVote` were pulled forward into the same migration.
-6. Question slices: ~~`CreateQuestion`~~ (done), ~~`GetQuestions`~~ (done; was `ListQuestions`, and also covers "questions by tag" through `?tags=`), ~~`GetQuestionById`~~ (done; was `GetQuestion`), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
+6. Question slices: ~~`CreateQuestion`~~ (done), ~~`GetQuestions`~~ (done; was `ListQuestions`, and also covers "questions by tag" through `?tags=`), ~~`GetQuestionById`~~ (done; was `GetQuestion`), ~~`EditQuestion`~~ (done; was `UpdateQuestion`, renamed after the domain's `Question.Edit`), `DeleteQuestion`. Only the author or an admin may change a question.
    - ~~**6.1 Seed the starting tags.**~~ Done. A question needs 1 to 5 tags and there is no endpoint that creates tags until step 5 of the build order, so `CreateQuestion` cannot succeed against an empty `tags` table. The list lives in `Data/TagSeed.cs` and is inserted through EF Core's `UseSeeding` / `UseAsyncSeeding` hooks, which `MigrateAsync` runs: insert-missing by slug, never updating existing rows.
 7. Answer slices: `PostAnswer`, `UpdateAnswer`, `DeleteAnswer`, then `AcceptAnswer` (question author only).
 8. A `.http` file that exercises each endpoint with a `cortex-dev-tools` token; update this file.
@@ -65,7 +66,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **Tags are sent as slugs.** The endpoint normalises them with `Tag.Normalize` (now public), loads the matching tags (tracked, so EF only writes the join rows) and returns a 400 `ValidationProblem` naming each unknown slug.
 - **Validation:** `WolverineFx.Http.FluentValidation` 6.64.0, enabled by `opts.UseFluentValidation()` in `WolverineSetup` and `opts.UseFluentValidationProblemDetailMiddleware()` on `MapWolverineEndpoints`. Rules reuse the domain's length constants and `DomainError` messages. Existence checks stay in the endpoint, because a validator with injected services pushes Wolverine towards service location.
 - **Domain errors over HTTP:** `DomainError` has a `Kind` (`DomainErrorKind`: `Validation`, the default, `Forbidden`, `Conflict`). `Infrastructure/DomainExceptionHandler` (an `IExceptionHandler`) maps it to 400 / 403 / 409 and writes a `ProblemDetails` with the message in `detail` and the code in the `code` extension. Registered by `services.AddErrorHandling()` (which also calls `AddProblemDetails()`), with `app.UseExceptionHandler()` first in the pipeline. Only `question.invalid_user` is `Forbidden` so far; nothing uses `Conflict` yet.
-- **Who may edit:** `Question.CanBeEditedBy(userId, isModerator)` answers the question and `Question.Edit` no longer takes the editor or checks the author. The edit endpoint must call `CanBeEditedBy` in its `Before` step and return 403. Accepted trade-off: `Edit` does not protect itself, so each mutating endpoint needs a test for the 403.
+- **Who may edit:** `Question.CanBeEditedBy(userId, isModerator)` answers the question and `Question.Edit` no longer takes the editor or checks the author. The edit endpoint calls `CanBeEditedBy` in its `Validate` step and returns 403. Accepted trade-off: `Edit` does not protect itself, so each mutating endpoint needs a test for the 403.
 - **Clock:** endpoints take `TimeProvider` (registered in `Program.cs` with `TryAddSingleton(TimeProvider.System)`) and pass `GetUtcNow()` to the domain.
 - **DbContext registration** changed to `AddDbContext` plus `EnrichNpgsqlDbContext`; see "Gotchas already hit".
 
@@ -103,11 +104,25 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **No HTTP caching yet:** a `Cache-Control` header or ASP.NET Core output caching would suit data that changes this rarely. Left out until there is a gateway and a frontend to measure against.
 - `GET /api/tags/{slug}` (one tag with a 404, for a tag page) is still planned for step 5.
 
+## EditQuestion (2026-11-18)
+`EditQuestion` (`Features/Questions/EditQuestion.cs`) is written, tested by hand and on the branch `feat/edit-question`.
+
+- **`PUT /api/questions/{id:guid}`, `[Authorize]`, 204 No Content.** Only the title, body and tags can change (decided 2026-11-18): the book and the author stay as created, so `EditQuestionRequest(Title, Body, TagSlugs)` does not carry them, and a `bookId` in the body is ignored. PUT rather than PATCH, because the request replaces all three editable fields; they are all required.
+- **First Load / Validate / Handle split.** Per the Wolverine 6 HTTP middleware docs, methods on the endpoint class named `Load`/`LoadAsync`, `Before` and `Validate` run before the main method, their return values become variables the main method takes as parameters, and an `IResult` other than `WolverineContinue.Result()` stops the request with that result.
+  - `LoadAsync(id, db)` returns `Question?`, tracked and with `Include(q => q.Tags)`: `Question.Edit` replaces the tag list, and EF can only work out which `question_tags` rows to insert or delete if the current ones are loaded. (Reads project and need no `Include`; writes load the aggregate.)
+  - `Validate(Question?, CurrentUser)` returns 404 for a missing question, then 403 when `CanBeEditedBy(user.Id, user.IsAdmin)` is false. Both checks live there instead of using `[Required]` for the 404, so their order is visible in one place.
+  - `Put(request, question, ...)` resolves the tags (unknown slugs: 400 `ValidationProblem`, same as `CreateQuestion`), calls `question.Edit` and `SaveChangesAsync`.
+- **Status order:** 401 (auth middleware), then 400 from FluentValidation, then 404, 403, and the unknown-tag 400. Validation runs before `LoadAsync`, so an invalid body gets 400 even for a missing question or a non-author (seen in testing). Accepted: it reveals nothing, since questions are public anyway, and it saves a database round trip for bad input.
+- **The 403 is a `ProblemDetails` built in `Validate`** with the same shape as `DomainExceptionHandler` (`detail` plus a `code` extension), from the new `Question.Errors.EditForbidden` (`question.edit_forbidden`, kind `Forbidden`). Returned, not thrown: a missing permission is an expected outcome, not an exception.
+- **204, not 200 with the question:** a `QuestionDetail` needs the projection (score, answer count) that `GetQuestionById` already does, so the client refetches or invalidates its query instead. Step 4 turns the return into `(NoContent, QuestionEdited)`.
+- **Duplicated on purpose:** the validator rules and the tag resolution repeat `CreateQuestion` (vertical slices over sharing). See "Known leftovers".
+- **Concurrency (open point):** two edits at the same time are last write wins. A concurrency token (Postgres `xmin` with `IsRowVersion()`, sent back as an `ETag` / `If-Match`) would turn the loser into a 409 or 412.
+
 ## Next up: the rest of item 6
-`UpdateQuestion` (with the `CanBeEditedBy` check in a `Before` step, 403 otherwise) and `DeleteQuestion`.
+`DeleteQuestion` (author or admin, with the same Load / Validate split).
 
 ## Repository state
-- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` (`9c70bcb`) and `GetQuestionById` (`a22bb44`) are on `main` and pushed. `GetTags` is on the branch `feat/get-tags`, pushed and not merged yet.
+- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` (`9c70bcb`) and `GetQuestionById` (`a22bb44`) are on `main` and pushed. `GetTags` (`2a83cff`) is on `main` and pushed. `EditQuestion` is on the branch `feat/edit-question`, pushed and not merged yet.
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
@@ -121,6 +136,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - Not verified: non-zero `Score` and `AnswersCount` in `GET /api/questions` (there are no vote or answer endpoints yet).
 - Verified by hand on 2026-11-18 against `GET /api/questions/{id}` (anonymous, first version of the endpoint): a malformed id (`abc`) returns 404. Not verified yet after the response was reworked into the current `QuestionDetail` (answers dropped, `AuthorId`, `AcceptedAnswerId` and `UpdatedAt` added): a 200 for an existing id, a 404 for an unknown GUID, and the new fields in the JSON. The service builds with no warnings.
 - Verified on 2026-11-18 under `aspire start` (anonymous `curl`): `GET /api/tags` returns 200 with all 32 seeded tags as `{ slug, name, description }`, sorted by name (`adaptations`, `audiobooks`, `authors`, ...); `POST /api/tags` returns 405.
+- Verified by hand on 2026-11-18 under `aspire start` against `PUT /api/questions/{id}` (`cortex-dev-tools` password-grant tokens, on a fresh "ET ..." question by `hephaestots`): 401 without a token; 404 for an unknown GUID and for `abc`; 403 as `reader` with `code` `question.edit_forbidden`; 400 for an empty title, six tags and an unknown tag (`TagSlugs`: "Tag 'nope' does not exist."); 204 as the author, after which `GET` shows the trimmed title, the new body, tags `fantasy` and `poetry` and a set `updatedAt`; 204 as `admin-user` with a `bookId` in the body, which stayed `null`. An empty title as `reader`, and an empty title on an unknown id, both return 400 (validation runs first).
 - Local Docker volumes in use: `keycloak-data`, `postgres-data`.
 
 ## Decisions taken for the Aspire 17 upgrade (2026-11-18)
@@ -145,6 +161,8 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **The context is named `QuestionDbContext`**; `docs/architecture.md` was updated to match.
 
 ## Gotchas already hit
+- **Keycloak is served over HTTPS since Aspire 17** (hit 2026-11-18): a token request to `http://localhost:6001` gets no answer; use `https://localhost:6001/realms/cortex/protocol/openid-connect/token` with the dev certificate (`curl -k` in scripts). The container's own port is 8443.
+- **FluentValidation runs before `LoadAsync`:** an invalid body is a 400 even when the question does not exist or the caller may not edit it. Do not expect a 404 or 403 from a test that also sends a bad body.
 - **Wolverine 6 wouldn't start** until `WolverineFx.RuntimeCompilation` was added and enabled with `opts.UseRuntimeCompilation()`.
 - **Access tokens lacked `sub`** until the `basic` client scope was added to the clients. Now in the realm file.
 - **Roles:** the built-in roles scope was removed in favour of a flat `roles` mapper on `cortex-web` and `cortex-dev-tools`, so read `roles`, not `realm_access.roles`.
@@ -175,4 +193,4 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - An unused `using Microsoft.Extensions.DependencyInjection.Extensions;` in `Infrastructure/ServiceCollectionExtensions.cs`.
 - `docs/architecture.md` still shows the `Program.cs` shape without `AddErrorHandling()`, `UseExceptionHandler()` and the FluentValidation middleware option.
 - **Response mapping (remark, 2026-11-14; partly decided 2026-11-18):** reads use EF projections (see "Read slices"). `CreateQuestionResponse.From(Question)` is still a hand-written mapper; Mapperly was considered and not adopted.
-- **Building `ValidationProblem` by hand (remark, 2026-11-14, not decided):** the unknown-tag check in `CreateQuestion` builds the `TypedResults.ValidationProblem(...)` dictionary inline. A small helper may be worth it once a second endpoint returns its own validation problem.
+- **Building `ValidationProblem` by hand (remark, 2026-11-14, not decided):** the unknown-tag check in `CreateQuestion` builds the `TypedResults.ValidationProblem(...)` dictionary inline. A small helper may be worth it once a second endpoint returns its own validation problem. **Triggered 2026-11-18:** `EditQuestion` now has the same check, so the tag resolution (normalise, load, list the missing slugs) and the `ValidationProblem` are copied in two slices, and so are the title, body and tag validator rules. Candidates: a tag lookup helper in `Features/Shared/` and a shared rule set (`Include()` in FluentValidation). Not decided.
