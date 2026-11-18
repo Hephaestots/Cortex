@@ -170,6 +170,8 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **The validator answers before the domain is reached:** the FluentValidation middleware short-circuits the request, so a request that breaks both a validator rule and a rule only the domain checks returns only the validator's errors (seen 2026-11-14: six tags plus an empty title, with the title rule disabled, reported only the tag count). The domain error appears once the validator passes.
 
 ## Known leftovers
+- **`GET /api/tags` returns a bare array (future work, decided 2026-11-18):** move it to `PagedResponse<T>` (with `?q=` search) once users can create tags in step 5 and the list grows. Doing it then breaks the response shape, so the frontend's tag query has to change at the same time.
+- **HTTP caching for master data (wanted, decided 2026-11-18):** add `Cache-Control` or ASP.NET Core output caching to `GET /api/tags` once the gateway and frontend exist and there is something to measure against.
 - An unused `using Microsoft.Extensions.DependencyInjection.Extensions;` in `Infrastructure/ServiceCollectionExtensions.cs`.
 - `docs/architecture.md` still shows the `Program.cs` shape without `AddErrorHandling()`, `UseExceptionHandler()` and the FluentValidation middleware option.
 - **Response mapping (remark, 2026-11-14; partly decided 2026-11-18):** reads use EF projections (see "Read slices"). `CreateQuestionResponse.From(Question)` is still a hand-written mapper; Mapperly was considered and not adopted.
