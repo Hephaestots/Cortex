@@ -311,7 +311,7 @@ Cortex/
   tests/
 ```
 
-AppHost wiring per service: `AddProject<...>("<name>-service")` with `.WithReference(...)` and `.WaitFor(...)` for Keycloak, its database and RabbitMQ.
+AppHost wiring per service: `AddDotnetProject("<name>-service", "../Services/Cortex.<Name>Service/Cortex.<Name>Service.csproj")` with `.WithReference(...)` and `.WaitFor(...)` for Keycloak, its database and RabbitMQ.
 
 ## Build order
 Progress against these steps is tracked in `docs/status.md`.

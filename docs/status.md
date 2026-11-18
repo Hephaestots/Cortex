@@ -79,7 +79,14 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - Not verified: that `/health` still reports Postgres after the switch to `EnrichNpgsqlDbContext`.
 - Not verified: updates and deletes. In particular, removing an accepted answer relies on EF clearing `accepted_answer_id` before deleting the answer row (the FK is `RESTRICT`).
 - Verified on 2026-11-13 with `cortex-dev-tools` tokens: `GET /api/account/me` returns 401 without a token and 200 as `reader`; `GET /api/admin/ping` returns 403 as `reader` and 200 as `admin-user`; `/me` returns the right id, name, email and roles for both users through `CurrentUser`, with no Wolverine service-location warning.
+- Verified on 2026-11-18 after the Aspire 17 upgrade and the AppHost migration: the solution builds with no warnings; under `aspire start`, Keycloak, Postgres, `questions-db` and the question service report healthy, the service keeps its launch-profile ports (7001 / 7002) and `/health` returns 200.
 - Local Docker volumes in use: `keycloak-data`, `postgres-data`.
+
+## Decisions taken for the Aspire 17 upgrade (2026-11-18)
+- **The AppHost no longer uses `Aspire.AppHost.Sdk`** (obsolete in 17, warning `ASPIRE012`): it is a plain `Microsoft.NET.Sdk` project with `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` package references.
+- **Services are added with `AddDotnetProject("<name>-service", "<path to csproj>")`** instead of `AddProject<Projects.X>` (obsolete, `CS0618`). The path is relative to the AppHost folder. The AppHost has no `ProjectReference` to the services any more, because nothing needs the generated `Projects.*` types.
+- **Trade-off accepted: watch mode is off** (`defaultWatchEnabled: false` in `aspire.config.json`). `AddDotnetProject` resources do not support `aspire run --watch` yet, so a code change in a service now needs an AppHost restart. Revisit when Aspire adds watch support for this model.
+- **The Aspire CLI is still 13.6.5;** only the packages were upgraded. It runs the 17 AppHost, but update the CLI itself (`aspire update --self`) before relying on 17-only CLI features.
 
 ## Decisions taken for step 3 (2026-11-11)
 - **Layout:** projects live in `src/` and `src/Services/` (moved before migrations exist).
@@ -101,7 +108,8 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **Access tokens lacked `sub`** until the `basic` client scope was added to the clients. Now in the realm file.
 - **Roles:** the built-in roles scope was removed in favour of a flat `roles` mapper on `cortex-web` and `cortex-dev-tools`, so read `roles`, not `realm_access.roles`.
 - **Realm edits need a fresh volume:** Keycloak skips the import when the realm already exists, and the AppHost persists Keycloak in the `keycloak-data` volume. After editing `cortex-realm.json`, delete that volume (or the realm) and restart, otherwise the change is silently ignored.
-- **`dotnet run` on the AppHost fails:** with `AspireUseCliBundle`, `dotnet run --project src/Cortex.AppHost` delegates to `aspire run --no-build`, which the CLI rejects while `defaultWatchEnabled` is true in `aspire.config.json` ("The --no-build option cannot be used when watch mode is enabled"). Use `aspire run` from the repo root.
+- **`dotnet run` on the AppHost failed while watch was on:** with `AspireUseCliBundle`, `dotnet run --project src/Cortex.AppHost` delegates to `aspire run --no-build`, which the CLI rejects while `defaultWatchEnabled` is true in `aspire.config.json` ("The --no-build option cannot be used when watch mode is enabled"). Watch is now off (see the Aspire 17 decision), but `dotnet run` has not been retried; keep using `aspire run` from the repo root.
+- **`aspire update` failed to restore on the 13.6.5 to 17.0 upgrade (2026-11-18):** `Aspire.Keycloak.Authentication` 17 needs `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.15 or later, and ServiceDefaults pinned 10.0.14, so NuGet reported a downgrade (`NU1605`, an error by default). The CLI only says "failed to restore"; run `dotnet restore` on the AppHost to see the real error. The pin is now 10.0.15 and has to follow each Aspire update.
 - **First start logs one EF error:** `Failed executing DbCommand ... FROM "__EFMigrationsHistory"` appears once on an empty database, because EF queries the history table before creating it. It is harmless.
 - **Checking the EF model without a database:** from the service folder, `env "ConnectionStrings__questions-db=Host=localhost;Database=x;Username=x;Password=x" dotnet ef dbcontext script` builds the model and prints the schema. Without the dummy connection string the design-time host fails.
 - **A collection navigation with no inverse is one-to-many by convention:** `Question.Tags` needed an explicit `HasMany().WithMany()`, and explicit FK names in `UsingEntity` to get `tag_id` instead of `tags_id`.
@@ -118,3 +126,5 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 ## Known leftovers
 - An unused `using Microsoft.Extensions.DependencyInjection.Extensions;` in `Infrastructure/ServiceCollectionExtensions.cs`.
 - `docs/architecture.md` still shows the `Program.cs` shape without `AddErrorHandling()`, `UseExceptionHandler()` and the FluentValidation middleware option.
+- **Response mapping (remark, 2026-11-14, not decided):** `CreateQuestionResponse.From(Question)` is a hand-written mapper inside the slice. Hephaestots does not like mapping this way and expects to move to some kind of mapper eventually; revisit when `GetQuestion` needs the same shape.
+- **Building `ValidationProblem` by hand (remark, 2026-11-14, not decided):** the unknown-tag check in `CreateQuestion` builds the `TypedResults.ValidationProblem(...)` dictionary inline. A small helper may be worth it once a second endpoint returns its own validation problem.
