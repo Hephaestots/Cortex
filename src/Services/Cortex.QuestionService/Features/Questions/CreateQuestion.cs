@@ -57,7 +57,7 @@ public static class CreateQuestionEndpoint
     }
 }
 
-public abstract record CreateQuestionRequest(
+public sealed record CreateQuestionRequest(
     string Title,
     string Body,
     string? BookId,
