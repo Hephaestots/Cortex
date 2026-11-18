@@ -64,8 +64,8 @@ src/Services/Cortex.QuestionService/
   Features/
     Questions/
       CreateQuestion.cs           // request record, validator, endpoint class, response
-      GetQuestion.cs
-      ListQuestions.cs
+      GetQuestions.cs             // list: offset paging, ?tags= filter (AND)
+      GetQuestionById.cs
       UpdateQuestion.cs
       DeleteQuestion.cs
       AcceptAnswer.cs
@@ -78,6 +78,9 @@ src/Services/Cortex.QuestionService/
       VoteOnAnswer.cs
     Tags/
       ListTags.cs
+    Shared/
+      PagedQuery.cs               // PagedQuery base + PagedQueryValidator<T>
+      PagedResponse.cs
     Events/                       // in-service handlers for events this service reacts to (optional)
 
   Domain/

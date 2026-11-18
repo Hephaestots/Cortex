@@ -1,6 +1,6 @@
 # Cortex: current status
 
-Last updated: 2026-11-14. Update this file when a milestone lands or a decision changes.
+Last updated: 2026-11-18. Update this file when a milestone lands or a decision changes.
 
 ## Where things stand
 - **AppHost** runs Keycloak (port 6001, `keycloak-data` volume, realm import), Postgres (`postgres` server on fixed port 5432, `postgres-data` volume, database `questions-db`, with pgAdmin) and the question service, which references and waits for both. **RabbitMQ is not in the AppHost yet**; it is added in step 4.
@@ -12,6 +12,7 @@ Last updated: 2026-11-14. Update this file when a milestone lands or a decision 
   - `GET /api/account/me`: static `MeEndpoint`, `[Authorize]`, returns `MeResponse(UserId, UserName, Email, Roles)` built from `CurrentUser`.
   - `GET /api/admin/ping`: `[Authorize(Policy = Policies.AdminOnly)]` (the policy requires the `admin` role). Verified 401 without a token, 403 as `user`, 200 as `admin`.
   - `POST /api/questions`: `[Authorize]`, creates a question for the caller and returns 201 with a `Location` header.
+  - `GET /api/questions`: public, newest first, offset paging, optional AND filter on tags (see "Read slices" below).
 - **Not started:** `Cortex.Contracts`, the gateway, the Profiles service, `web/`, `tests/`.
 
 ## Build order progress
@@ -29,7 +30,7 @@ Each item is one small commit.
 3. ~~Add Postgres to the AppHost: database `questions-db`, referenced and waited on by the question service.~~ Done.
 4. ~~EF Core skeleton: `Data/QuestionDbContext`, `Infrastructure/` (`CurrentUser`, `WolverineSetup`, `ServiceCollectionExtensions`), slimmer `Program.cs`.~~ Done.
 5. ~~Domain and first migration: `Question`, `Answer`, their configurations, including `AcceptedAnswerId` with its composite FK. `BookId` is a nullable string.~~ Done, and `Tag`, `QuestionVote` and `AnswerVote` were pulled forward into the same migration.
-6. Question slices: ~~`CreateQuestion`~~ (done), `GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
+6. Question slices: ~~`CreateQuestion`~~ (done), ~~`GetQuestions`~~ (done; was `ListQuestions`, and also covers "questions by tag" through `?tags=`), `GetQuestionById` (was `GetQuestion`), `UpdateQuestion`, `DeleteQuestion`. Only the author or an admin may change a question.
    - ~~**6.1 Seed the starting tags.**~~ Done. A question needs 1 to 5 tags and there is no endpoint that creates tags until step 5 of the build order, so `CreateQuestion` cannot succeed against an empty `tags` table. The list lives in `Data/TagSeed.cs` and is inserted through EF Core's `UseSeeding` / `UseAsyncSeeding` hooks, which `MigrateAsync` runs: insert-missing by slug, never updating existing rows.
 7. Answer slices: `PostAnswer`, `UpdateAnswer`, `DeleteAnswer`, then `AcceptAnswer` (question author only).
 8. A `.http` file that exercises each endpoint with a `cortex-dev-tools` token; update this file.
@@ -66,11 +67,24 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **Clock:** endpoints take `TimeProvider` (registered in `Program.cs` with `TryAddSingleton(TimeProvider.System)`) and pass `GetUtcNow()` to the domain.
 - **DbContext registration** changed to `AddDbContext` plus `EnrichNpgsqlDbContext`; see "Gotchas already hit".
 
+## Read slices (2026-11-18)
+`GetQuestions` is written, tested by hand and committed (see "Repository state").
+
+- **One list endpoint with filters, not one endpoint per filter.** "Questions by tag" is `GET /api/questions?tags=x`, not `/api/tags/{slug}/questions`. A tag narrows the same collection, filters combine (`?bookId=`, `?sort=` later), and it is what the Stack Exchange and GitHub APIs do. Nested routes are kept for real ownership (`/api/questions/{id}/answers`). A tag page that needs the tag's own data (name, description, a 404 for an unknown tag) will call `GET /api/tags/{slug}` from the tags slice.
+- **Tags filter:** repeated keys (`?tags=a&tags=b`), combined with **AND** (a question must have all of them), normalised with `Tag.Normalize`, duplicates and empty values dropped, at most `Question.MaxTags` (5: with AND, more can never match). Implemented as one `Where(q => q.Tags.Any(t => t.Slug == slug))` per tag, which becomes one `EXISTS` each and uses `ix_question_tags_tag_id`. An unknown tag gives an empty page. Comma-separated values are not split: `?tags=a,b` is the single tag `"a,b"`.
+- **Offset paging** (`?page=&pageSize=`, defaults 1 and 20, `pageSize` at most 50), chosen over keyset for page numbers and a total count, and because "top" sorting will page the same way. Costs accepted: deep pages get slower, and inserts can shift rows between pages. Order is `CreatedAt DESC, Id DESC`; the id breaks ties so a row never appears on two pages or none. The count runs on the filtered query before paging (a second query).
+- **Shared paging types in `Features/Shared/`:** `PagedQuery` (abstract base for `[FromQuery]` list queries: `Page`, `PageSize`, `Skip`, `DefaultPageSize`, `MaxPageSize`, `MaxPage`), `PagedQueryValidator<T>` (abstract; a query's validator derives from it to get the paging rules) and `PagedResponse<T>(Items, Page, PageSize, TotalCount)` with a computed `TotalPages`. Verified that Wolverine binds the inherited properties and runs the derived validator.
+- **Binding:** the query is a class with settable properties and defaults, bound with `[FromQuery]`, so every parameter is optional; Wolverine's FluentValidation middleware validates `[FromQuery]` types too. `opts.RejectUnparseableQueryValues = true` in `Program.cs` turns `?page=abc` into a 400 (by default Wolverine silently keeps the default value; strict becomes the default in Wolverine 7). Query keys are case-insensitive.
+- **Responses are EF projections** (`Select(q => new Dto(...))` written inline), not mappers: EF selects only the needed columns, computes `AnswersCount` and `Score` (`SUM` of the vote values) in SQL, and tracks nothing, so no `Include` or `AsNoTracking`. Never call a `From(q)` method inside `Select`: EF cannot see into it and loads the entity without its navigations. `QuestionSummary` has no `Body`.
+- **Return type:** `Ok<PagedResponse<T>>` built with `TypedResults.Ok(...)`. No `NotFound` (an empty page is not missing), and the 400 comes from the validation middleware.
+- **Reads are public:** no `[Authorize]`, and they must not take `CurrentUser` (it throws without a user).
+- **`ViewCount` is not incremented on GET** (open point): a read that writes breaks safe and cacheable GETs. Candidate later: an event, or a separate endpoint.
+
 ## Next up: the rest of item 6
-`GetQuestion`, `ListQuestions` (newest first, paged), `UpdateQuestion` (with the `CanBeEditedBy` check) and `DeleteQuestion`. `CreateQuestionResponse` will probably become a shared `QuestionResponse` once `GetQuestion` returns the same shape.
+`GetQuestionById` (`GET /api/questions/{id}`, `Results<Ok<QuestionDetail>, NotFound>`, projection with `FirstOrDefaultAsync`, no answers until the Answers slice), then `UpdateQuestion` (with the `CanBeEditedBy` check) and `DeleteQuestion`.
 
 ## Repository state
-- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). There are no open branches.
+- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` is on the branch `feat/get-questions`, pushed and not merged yet.
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
@@ -80,13 +94,15 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - Not verified: updates and deletes. In particular, removing an accepted answer relies on EF clearing `accepted_answer_id` before deleting the answer row (the FK is `RESTRICT`).
 - Verified on 2026-11-13 with `cortex-dev-tools` tokens: `GET /api/account/me` returns 401 without a token and 200 as `reader`; `GET /api/admin/ping` returns 403 as `reader` and 200 as `admin-user`; `/me` returns the right id, name, email and roles for both users through `CurrentUser`, with no Wolverine service-location warning.
 - Verified on 2026-11-18 after the Aspire 17 upgrade and the AppHost migration: the solution builds with no warnings; under `aspire start`, Keycloak, Postgres, `questions-db` and the question service report healthy, the service keeps its launch-profile ports (7001 / 7002) and `/health` returns 200.
+- Verified by hand on 2026-11-18 against `GET /api/questions` (anonymous): `?pageSize=3` and `?page=2&pageSize=2` return the right slices, `totalCount` and `totalPages`; `?tags=fantasy&tags=horror` returns only the question with both; `?tags=Fantasy` matches `fantasy`; `?tags=` behaves like no filter; `?tags=nope` and `?tags=fantasy,horror` return an empty page; `?page=0`, `?pageSize=51`, `?page=99999999`, six tags and `?page=abc` return 400; `?PAGESIZE=1` works. Test questions named "PT ..." were left in the dev database.
+- Not verified: non-zero `Score` and `AnswersCount` in `GET /api/questions` (there are no vote or answer endpoints yet).
 - Local Docker volumes in use: `keycloak-data`, `postgres-data`.
 
 ## Decisions taken for the Aspire 17 upgrade (2026-11-18)
 - **The AppHost no longer uses `Aspire.AppHost.Sdk`** (obsolete in 17, warning `ASPIRE012`): it is a plain `Microsoft.NET.Sdk` project with `Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` package references.
 - **Services are added with `AddDotnetProject("<name>-service", "<path to csproj>")`** instead of `AddProject<Projects.X>` (obsolete, `CS0618`). The path is relative to the AppHost folder. The AppHost has no `ProjectReference` to the services any more, because nothing needs the generated `Projects.*` types.
 - **Trade-off accepted: watch mode is off** (`defaultWatchEnabled: false` in `aspire.config.json`). `AddDotnetProject` resources do not support `aspire run --watch` yet, so a code change in a service now needs an AppHost restart. Revisit when Aspire adds watch support for this model.
-- **The Aspire CLI is still 13.6.5;** only the packages were upgraded. It runs the 17 AppHost, but update the CLI itself (`aspire update --self`) before relying on 17-only CLI features.
+- **Update the Aspire CLI separately:** `aspire update` upgrades the packages only; the CLI itself needs `aspire update --self`. Done for 17 on 2026-11-18.
 
 ## Decisions taken for step 3 (2026-11-11)
 - **Layout:** projects live in `src/` and `src/Services/` (moved before migrations exist).
@@ -120,11 +136,14 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **FluentValidation's `Must` has a useless default message** ("The specified condition was not met for 'Tag Slugs'."). Always give it one; `WithError(DomainError)` does.
 - **FluentValidation error codes do not reach the client:** Wolverine's problem-details middleware emits only property names and messages, so the message is all a client gets from a validator failure. Codes only appear in `DomainExceptionHandler` responses.
 - **FluentValidation keeps running a rule chain after a failure:** `NotNull().Must(x => x.Count ...)` throws on null. Use `.Cascade(CascadeMode.Stop)` or a null-safe predicate.
+- **`abstract` on a request type breaks the endpoint at runtime** (hit 2026-11-18): Wolverine only binds a concrete type from the JSON body, so it looked for `CreateQuestionRequest` elsewhere and code generation failed with `UnResolvableVariableException` on the first request (500). It builds fine. Request and query types are `sealed`.
+- **`PagedResult` from `System.Linq.Dynamic.Core` is not ours** (hit 2026-11-18): the package comes in transitively through JasperFx, so the IDE offers its types. Its `PagedResult` holds an unexecuted `IQueryable` that the JSON serializer would run synchronously. Use `Features/Shared/PagedResponse<T>` with a materialised list.
+- **Unbounded `?page=` overflows `Skip`:** `(Page - 1) * PageSize` past `int.MaxValue` goes negative and `Skip` throws (500). `PagedQuery.MaxPage` caps it, so it is a 400.
 - **Validation error keys are the C# property names** (`TagSlugs`, not `tagSlugs`). A hand-built `ValidationProblem` should use `nameof(...)` so both 400s agree.
 - **The validator answers before the domain is reached:** the FluentValidation middleware short-circuits the request, so a request that breaks both a validator rule and a rule only the domain checks returns only the validator's errors (seen 2026-11-14: six tags plus an empty title, with the title rule disabled, reported only the tag count). The domain error appears once the validator passes.
 
 ## Known leftovers
 - An unused `using Microsoft.Extensions.DependencyInjection.Extensions;` in `Infrastructure/ServiceCollectionExtensions.cs`.
 - `docs/architecture.md` still shows the `Program.cs` shape without `AddErrorHandling()`, `UseExceptionHandler()` and the FluentValidation middleware option.
-- **Response mapping (remark, 2026-11-14, not decided):** `CreateQuestionResponse.From(Question)` is a hand-written mapper inside the slice. Hephaestots does not like mapping this way and expects to move to some kind of mapper eventually; revisit when `GetQuestion` needs the same shape.
+- **Response mapping (remark, 2026-11-14; partly decided 2026-11-18):** reads use EF projections (see "Read slices"). `CreateQuestionResponse.From(Question)` is still a hand-written mapper; Mapperly was considered and not adopted.
 - **Building `ValidationProblem` by hand (remark, 2026-11-14, not decided):** the unknown-tag check in `CreateQuestion` builds the `TypedResults.ValidationProblem(...)` dictionary inline. A small helper may be worth it once a second endpoint returns its own validation problem.

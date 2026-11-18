@@ -33,7 +33,10 @@ app.MapDefaultEndpoints();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapWolverineEndpoints(opts => 
-    opts.UseFluentValidationProblemDetailMiddleware());
+app.MapWolverineEndpoints(opts =>
+{
+    opts.UseFluentValidationProblemDetailMiddleware();
+    opts.RejectUnparseableQueryValues = true;
+});
 
 app.Run();
