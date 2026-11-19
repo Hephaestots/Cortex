@@ -67,7 +67,7 @@ src/Services/Cortex.QuestionService/
       GetQuestions.cs             // list: offset paging, ?tags= filter (AND)
       GetQuestionById.cs
       EditQuestion.cs
-      DeleteQuestion.cs
+      DeleteQuestion.cs           // hard delete, ?version= for optimistic concurrency
       AcceptAnswer.cs
     Answers/
       PostAnswer.cs               // [WolverinePost("/api/questions/{questionId}/answers")]
