@@ -6,4 +6,7 @@
   <Folder Name="/src/Services/">
     <Project Path="src/Services/Cortex.QuestionService/Cortex.QuestionService.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Cortex.QuestionService.Tests/Cortex.QuestionService.Tests.csproj" />
+  </Folder>
 </Solution>

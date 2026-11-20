@@ -304,7 +304,7 @@ YARP is Microsoft's reverse proxy library. The gateway is a small ASP.NET projec
 - TanStack Query for fetched data, caching and mutations. Zustand only for local UI state (modals, drafts, filters).
 
 ## Solution layout
-Target layout. Only `Cortex.AppHost`, `Cortex.ServiceDefaults` and `Cortex.QuestionService` exist so far (see `docs/status.md`). `Cortex.slnx` and `aspire.config.json` stay at the repo root.
+Target layout. Only `Cortex.AppHost`, `Cortex.ServiceDefaults`, `Cortex.QuestionService` and `tests/Cortex.QuestionService.Tests` exist so far (see `docs/status.md`). `Cortex.slnx` and `aspire.config.json` stay at the repo root.
 ```
 Cortex/
   src/

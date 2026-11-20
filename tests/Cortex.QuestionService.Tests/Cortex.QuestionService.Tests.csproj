@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Cortex.QuestionService.Tests</RootNamespace>
+        <!-- xUnit v3 test projects are executables, run through Microsoft.Testing.Platform
+             (opted into for dotnet test in global.json), so no VSTest packages are needed. -->
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Alba" Version="9.0.0" />
+        <!-- The service runs on EF Core 10.0.15, brought in by Microsoft.EntityFrameworkCore.Design,
+             which is PrivateAssets and so invisible here; the only EF this project would see is
+             10.0.14 from Aspire.Npgsql.EntityFrameworkCore.PostgreSQL (MSB3277). Keep in step
+             with the service's Design package. -->
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
+        <PackageReference Include="Shouldly" Version="4.3.0" />
+        <PackageReference Include="Testcontainers.PostgreSql" Version="4.17.0" />
+        <PackageReference Include="xunit.v3" Version="4.0.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Alba" />
+        <Using Include="Microsoft.Extensions.DependencyInjection" />
+        <Using Include="Shouldly" />
+        <Using Include="Xunit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Services\Cortex.QuestionService\Cortex.QuestionService.csproj" />
+    </ItemGroup>
+
+</Project>
