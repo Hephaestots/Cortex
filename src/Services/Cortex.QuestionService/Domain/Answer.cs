@@ -44,15 +44,22 @@ public sealed class Answer : IVersioned
         AuthorDisplayName = authorDisplayName;
     }
 
-    public void Edit(string body, string editorId, DateTimeOffset now)
+    /// <summary>
+    /// The same rule as <see cref="Question.CanBeEditedBy"/>: the author or a moderator (admin).
+    /// Used for both editing and deleting.
+    /// </summary>
+    public bool CanBeEditedBy(string userId, bool isModerator) =>
+        isModerator || AuthorId == userId;
+
+    /// <summary>
+    /// Replaces the body. Does not check who edits, like <see cref="Question.Edit"/>: the
+    /// endpoint asks <see cref="CanBeEditedBy"/> first and answers 403, so each mutating
+    /// endpoint needs a test for that 403.
+    /// </summary>
+    public void Edit(string body, DateTimeOffset now)
     {
-        DomainGuard.AgainstNullOrWhiteSpace(editorId, Errors.EmptyUserId);
-        
-        if (editorId != AuthorId)
-            throw new DomainException(Errors.InvalidAuthor);
-        
         SetBody(body);
-        
+
         UpdatedAt = now;
     }
 
@@ -83,14 +90,14 @@ public sealed class Answer : IVersioned
         public static readonly DomainError EmptyAuthorDisplayName =
             new("answer.empty_author_display_name", "The author display name must not be null or empty.");
         
-        public static readonly DomainError EmptyUserId =
-            new("answer.empty_user_id", "The user id must not be null or empty.");
-        
         public static readonly DomainError EmptyQuestionId =
             new("answer.empty_question_id", "The question id must not be empty.");
-        
-        public static readonly DomainError InvalidAuthor = 
-            new("answer.invalid_author", "Only the author can edit this answer.");
+
+        public static readonly DomainError EditForbidden =
+            new("answer.edit_forbidden", "Only the author or an admin can edit this answer.", DomainErrorKind.Forbidden);
+
+        public static readonly DomainError DeleteForbidden =
+            new("answer.delete_forbidden", "Only the author or an admin can delete this answer.", DomainErrorKind.Forbidden);
         
         public static readonly DomainError EmptyBody = 
             new("answer.empty_body", "The body of the answer must not be null or empty.");

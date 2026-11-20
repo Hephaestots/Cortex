@@ -45,28 +45,36 @@ public sealed class AnswerTests
     }
 
     [Fact]
-    public void The_author_edits_the_body_and_UpdatedAt_is_set()
+    public void Edit_replaces_the_body_and_sets_UpdatedAt()
     {
         var answer = NewAnswer(NewQuestion());
         var later = Now.AddMinutes(5);
 
-        answer.Edit("Second thoughts.", OtherUserId, later);
+        answer.Edit("Second thoughts.", later);
 
         answer.Body.ShouldBe("Second thoughts.");
         answer.UpdatedAt.ShouldBe(later);
     }
 
-    /// <summary>
-    /// Unlike <c>Question</c>, where the endpoint asks <c>CanBeEditedBy</c> and admins may edit,
-    /// <c>Answer.Edit</c> checks the editor itself and allows only the author. Pinned here so the
-    /// UpdateAnswer slice changes it on purpose if admins should edit answers too.
-    /// </summary>
     [Fact]
-    public void Only_the_author_can_edit_an_answer()
+    public void Edit_enforces_the_body_rules_and_keeps_the_old_body()
     {
         var answer = NewAnswer(NewQuestion());
 
-        ErrorCodeOf(() => answer.Edit("Hijacked.", AuthorId, Now)).ShouldBe("answer.invalid_author");
+        ErrorCodeOf(() => answer.Edit(" ", Now)).ShouldBe("answer.empty_body");
+        ErrorCodeOf(() => answer.Edit(new string('b', Answer.MaxBodyLength + 1), Now)).ShouldBe("answer.body_too_long");
         answer.Body.ShouldBe("Read it again.");
+        answer.UpdatedAt.ShouldBeNull();
     }
+
+    /// <summary>
+    /// Same rule as questions (decided 2026-11-20): the author or an admin. The question's
+    /// author has no say over other people's answers.
+    /// </summary>
+    [Theory]
+    [InlineData(OtherUserId, false, true)]  // the answer's author
+    [InlineData(AuthorId, false, false)]    // the question's author
+    [InlineData(AuthorId, true, true)]      // an admin
+    public void Only_the_answers_author_or_a_moderator_can_edit(string userId, bool isModerator, bool expected) =>
+        NewAnswer(NewQuestion(), authorId: OtherUserId).CanBeEditedBy(userId, isModerator).ShouldBe(expected);
 }
