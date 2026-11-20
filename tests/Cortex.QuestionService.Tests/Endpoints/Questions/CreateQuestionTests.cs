@@ -1,5 +1,6 @@
 using Cortex.QuestionService.Features.Questions;
 using Cortex.QuestionService.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 namespace Cortex.QuestionService.Tests.Endpoints.Questions;
 
@@ -41,6 +42,10 @@ public sealed class CreateQuestionTests(AppFixture fixture)
         // Normalized like every slug: "Horror" is the seeded "horror".
         created.TagSlugs.ShouldBe(["horror", "fantasy"], ignoreOrder: true);
         created.Version.ShouldNotBe(0u);
+
+        // The view counter row is inserted with the question, at 0.
+        var counter = await fixture.WithDbAsync(db => db.QuestionViewCounts.SingleAsync(c => c.QuestionId == created.Id));
+        counter.Count.ShouldBe(0);
 
         // What GET reads back is what was saved, with the same version.
         var stored = await fixture.GetQuestionAsync(created.Id);

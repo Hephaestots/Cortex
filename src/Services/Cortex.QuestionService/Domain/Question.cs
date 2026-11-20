@@ -19,7 +19,6 @@ public sealed class Question : IVersioned
     public string AuthorId { get; private set; } = null!;
     public string AuthorDisplayName { get; private set; } = null!;
     public string? BookId { get; private set; }
-    public int ViewCount { get; private set; }
     public Guid? AcceptedAnswerId { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset? UpdatedAt { get; private set; }
@@ -30,6 +29,9 @@ public sealed class Question : IVersioned
     public IReadOnlyCollection<Answer> Answers => _answers;
     public IReadOnlyCollection<Tag> Tags => _tags;
     public IReadOnlyCollection<QuestionVote> Votes => _votes;
+
+    /// <summary>The view counter, a separate row so views never change <see cref="Version"/>.</summary>
+    public QuestionViewCount ViewCount { get; private set; } = null!;
     
     public bool HasAcceptedAnswer => AcceptedAnswerId is not null;
     
@@ -49,6 +51,9 @@ public sealed class Question : IVersioned
         SetAuthor(authorId,  authorDisplayName);
         SetContent(title, body);
         SetTags(tags);
+
+        // Inserted with the question, so counting a view is always an UPDATE.
+        ViewCount = new QuestionViewCount(Id);
     }
     
     public bool CanBeEditedBy(string userId, bool isModerator) =>

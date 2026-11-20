@@ -9,6 +9,7 @@ public sealed class QuestionDbContext(DbContextOptions<QuestionDbContext> option
     public DbSet<AnswerVote> AnswerVotes { get; set; }
     public DbSet<Question> Questions { get; set; }
     public DbSet<QuestionVote>  QuestionVotes { get; set; }
+    public DbSet<QuestionViewCount> QuestionViewCounts { get; set; }
     public DbSet<Tag> Tags { get; set; }
     
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>

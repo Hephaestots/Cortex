@@ -154,10 +154,6 @@ namespace Cortex.QuestionService.Data.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
-                    b.Property<int>("ViewCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("view_count");
-
                     b.HasKey("Id")
                         .HasName("pk_questions");
 
@@ -165,6 +161,22 @@ namespace Cortex.QuestionService.Data.Migrations
                         .HasDatabaseName("ix_questions_question_id_accepted_answer_id");
 
                     b.ToTable("questions", (string)null);
+                });
+
+            modelBuilder.Entity("Cortex.QuestionService.Domain.QuestionViewCount", b =>
+                {
+                    b.Property<Guid>("QuestionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("question_id");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer")
+                        .HasColumnName("count");
+
+                    b.HasKey("QuestionId")
+                        .HasName("pk_question_view_counts");
+
+                    b.ToTable("question_view_counts", (string)null);
                 });
 
             modelBuilder.Entity("Cortex.QuestionService.Domain.QuestionVote", b =>
@@ -283,6 +295,16 @@ namespace Cortex.QuestionService.Data.Migrations
                         .HasConstraintName("fk_questions_accepted_answer");
                 });
 
+            modelBuilder.Entity("Cortex.QuestionService.Domain.QuestionViewCount", b =>
+                {
+                    b.HasOne("Cortex.QuestionService.Domain.Question", null)
+                        .WithOne("ViewCount")
+                        .HasForeignKey("Cortex.QuestionService.Domain.QuestionViewCount", "QuestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_question_view_counts_questions_question_id");
+                });
+
             modelBuilder.Entity("Cortex.QuestionService.Domain.QuestionVote", b =>
                 {
                     b.HasOne("Cortex.QuestionService.Domain.Question", "Question")
@@ -320,6 +342,9 @@ namespace Cortex.QuestionService.Data.Migrations
             modelBuilder.Entity("Cortex.QuestionService.Domain.Question", b =>
                 {
                     b.Navigation("Answers");
+
+                    b.Navigation("ViewCount")
+                        .IsRequired();
 
                     b.Navigation("Votes");
                 });

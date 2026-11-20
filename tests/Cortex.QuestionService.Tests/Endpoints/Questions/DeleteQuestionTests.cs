@@ -96,7 +96,8 @@ public sealed class DeleteQuestionTests(AppFixture fixture)
     }
 
     /// <summary>
-    /// The endpoint loads only the question row and leaves the rest to Postgres's cascades.
+    /// The endpoint loads only the question row and leaves the rest to Postgres's cascades,
+    /// including the view counter row.
     /// An accepted answer is the case that would break if EF deleted the answers itself
     /// (<c>fk_questions_accepted_answer</c> is RESTRICT).
     /// </summary>
@@ -128,6 +129,7 @@ public sealed class DeleteQuestionTests(AppFixture fixture)
         await fixture.WithDbAsync(async db =>
         {
             (await db.Answers.CountAsync(a => a.QuestionId == question.Id)).ShouldBe(0);
+            (await db.QuestionViewCounts.CountAsync(c => c.QuestionId == question.Id)).ShouldBe(0);
             (await db.QuestionVotes.CountAsync(v => v.QuestionId == question.Id)).ShouldBe(0);
             (await db.AnswerVotes.CountAsync(v => v.AnswerId == answer.Id)).ShouldBe(0);
             (await db.Tags.Where(t => t.Slug == tag).SelectMany(t => t.Questions).CountAsync()).ShouldBe(0);

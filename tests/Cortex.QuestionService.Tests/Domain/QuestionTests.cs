@@ -20,6 +20,15 @@ public sealed class QuestionTests
     }
 
     [Fact]
+    public void A_new_question_comes_with_its_view_counter_at_zero()
+    {
+        var question = NewQuestion();
+
+        question.ViewCount.QuestionId.ShouldBe(question.Id);
+        question.ViewCount.Count.ShouldBe(0);
+    }
+
+    [Fact]
     public void The_title_is_trimmed_before_its_length_is_checked()
     {
         var exactlyMax = new string('t', Question.MaxTitleLength);
