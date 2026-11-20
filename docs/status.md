@@ -204,7 +204,7 @@ The tag and vote entities and tables now exist, but their endpoints stay out of 
 - **Tests:** `GetAnswerByIdTests`, `GetAnswersTests`, `EditAnswerTests`, `DeleteAnswerTests` (126 tests in the project).
 
 ## View counts (2026-11-20)
-On the branch `feature/question-view-counts`.
+On `main` (merged 2026-11-20).
 
 **Problem:** counting views as a column of `questions` (tried first: `ExecuteUpdate` of `view_count + 1` in `GetQuestionById`) changed the question's version on every view, because the version is `xmin` and `xmin` changes on any UPDATE of the row. An author who had loaded the question got a 409 on edit or delete as soon as anyone else viewed it; four tests caught it.
 
@@ -224,7 +224,7 @@ On the branch `feature/question-view-counts`.
 `AcceptAnswer` (question author only; `Question.AcceptAnswer` and `ClearAcceptedAnswer` exist in the domain, the endpoint does not), then item 8.
 
 ## Repository state
-- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` (`9c70bcb`) and `GetQuestionById` (`a22bb44`) are on `main` and pushed. `GetTags` (`2a83cff`) is on `main` and pushed. `EditQuestion`, the shared helpers and optimistic concurrency (migration `20261118235518_AddQuestionVersion`, empty on purpose) are on `main` and pushed (`f372972`). `DeleteQuestion` is on `main` (`b67c986`). `CreateAnswer` is on `main` (`2e031dd`). The test project and its tests are on `main` (`fb4f1c5`). The other answer slices and the read projections are on `main` (merged 2026-11-20). View counts are on the branch `feature/question-view-counts`.
+- Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` (`9c70bcb`) and `GetQuestionById` (`a22bb44`) are on `main` and pushed. `GetTags` (`2a83cff`) is on `main` and pushed. `EditQuestion`, the shared helpers and optimistic concurrency (migration `20261118235518_AddQuestionVersion`, empty on purpose) are on `main` and pushed (`f372972`). `DeleteQuestion` is on `main` (`b67c986`). `CreateAnswer` is on `main` (`2e031dd`). The test project and its tests are on `main` (`fb4f1c5`). The other answer slices and the read projections are on `main` (merged 2026-11-20). View counts are on `main` (merged 2026-11-20).
 - Run with `aspire run` from the repo root; stop with Ctrl+C (or `aspire start` / `aspire stop`).
 - Verified on 2026-11-11: solution builds with no warnings; under the AppHost, Postgres 18.3 starts, `questions-db` exists, the question service is healthy and receives `ConnectionStrings__questions-db`; `GET /api/account/me` returns 401 without a token.
 - Verified on 2026-11-13: the question service builds with no warnings; under the AppHost it starts healthy, applies `20261113222737_Initial`, and `questions-db` contains the six tables plus `__EFMigrationsHistory`, with `author_id` / `voter_id` at 255 characters and the unique `ix_tags_slug` index.
