@@ -1,5 +1,6 @@
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
+using Cortex.QuestionService.Features.Answers;
 using Cortex.QuestionService.Features.Questions;
 
 namespace Cortex.QuestionService.Tests.Infrastructure;
@@ -54,6 +55,23 @@ public static class TestData
 
         return await result.ReadAsJsonAsync<CreateQuestionResponse>()
                ?? throw new InvalidOperationException("POST /api/questions returned no body.");
+    }
+
+    public static async Task<CreateAnswerResponse> CreateAnswerAsync(
+        this AppFixture fixture,
+        Guid questionId,
+        TestUser? author = null,
+        string body = "It reads differently once you know the ending.")
+    {
+        var result = await fixture.Host.Scenario(s =>
+        {
+            s.As(author ?? TestUsers.Reader);
+            s.Post.Json(new CreateAnswerRequest(body)).ToUrl($"/api/questions/{questionId}/answers");
+            s.StatusCodeShouldBe(201);
+        });
+
+        return await result.ReadAsJsonAsync<CreateAnswerResponse>()
+               ?? throw new InvalidOperationException("POST .../answers returned no body.");
     }
 
     public static async Task<QuestionDetail> GetQuestionAsync(this AppFixture fixture, Guid id)

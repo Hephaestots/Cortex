@@ -1,5 +1,4 @@
 using Cortex.QuestionService.Domain;
-using Cortex.QuestionService.Features.Answers;
 using Cortex.QuestionService.Features.Questions;
 using Cortex.QuestionService.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -106,8 +105,8 @@ public sealed class DeleteQuestionTests(AppFixture fixture)
     {
         var tag = await fixture.CreateTagAsync();
         var question = await fixture.CreateQuestionAsync(tags: [tag]);
-        var answer = await AnswerAsync(question.Id, TestUsers.Reader);
-        await AnswerAsync(question.Id, TestUsers.Admin);
+        var answer = await fixture.CreateAnswerAsync(question.Id, TestUsers.Reader);
+        await fixture.CreateAnswerAsync(question.Id, TestUsers.Admin);
 
         // No endpoints yet for votes and accepting, so they go in through the domain.
         var now = DateTimeOffset.UtcNow;
@@ -134,18 +133,5 @@ public sealed class DeleteQuestionTests(AppFixture fixture)
             (await db.Tags.Where(t => t.Slug == tag).SelectMany(t => t.Questions).CountAsync()).ShouldBe(0);
             (await db.Tags.CountAsync(t => t.Slug == tag)).ShouldBe(1);
         });
-    }
-
-    private async Task<CreateAnswerResponse> AnswerAsync(Guid questionId, TestUser user)
-    {
-        var result = await fixture.Host.Scenario(s =>
-        {
-            s.As(user);
-            s.Post.Json(new CreateAnswerRequest("An answer.")).ToUrl($"/api/questions/{questionId}/answers");
-            s.StatusCodeShouldBe(201);
-        });
-
-        return await result.ReadAsJsonAsync<CreateAnswerResponse>()
-               ?? throw new InvalidOperationException("POST .../answers returned no body.");
     }
 }
