@@ -1,18 +1,24 @@
+using Cortex.SearchService.Infrastructure;
 using Cortex.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Aspire defaults: service discovery (resolves the typesense endpoint), resilience, telemetry
-// and the health checks behind /health, which the AppHost's WithHttpHealthCheck waits on.
 builder.AddServiceDefaults();
-
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.AddTypesense();
+builder.Services.AddSearchCollections();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Before app.Run(), so the collections exist before any message is handled. A timeout instead of
+// a shutdown token: Ctrl+C handling only starts with app.Run(), so it could not cancel this.
+using (var startupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+{
+    await app.Services
+        .GetRequiredService<SearchCollectionsInitializer>()
+        .EnsureCollectionsExistAsync(startupTimeout.Token);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

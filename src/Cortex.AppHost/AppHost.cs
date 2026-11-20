@@ -28,8 +28,6 @@ var typesense = builder
     .WithArgs("--data-dir", "/data", "--enable-cors")
     .WithEnvironment("TYPESENSE_API_KEY", typesenseApiKey)
     .WithVolume("typesense-data", "/data")
-    // An HTTP endpoint named "http": the third positional argument of WithEndpoint is the URL
-    // scheme, not the name, so the old call produced typesense://localhost:8108.
     .WithHttpEndpoint(port: 8108, targetPort: 8108, name: "http")
     // Typesense answers GET /health with {"ok":true} once it can serve, so WaitFor means ready.
     .WithHttpHealthCheck("/health");
