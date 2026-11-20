@@ -165,7 +165,7 @@ public sealed class Question : IVersioned
             new("question.empty_author_id", "The question author id must not be null or empty.");
             
         public static readonly DomainError EmptyAuthorDisplayName =
-            new("question.empty_author_display_name", "The question author display must not be null or empty.");
+            new("question.empty_author_display_name", "The question author display name must not be null or empty.");
             
         public static readonly DomainError EmptyBody =
             new("question.empty_body", "The question body must not be null or empty.");

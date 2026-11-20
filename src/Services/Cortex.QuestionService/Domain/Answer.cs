@@ -93,6 +93,6 @@ public sealed class Answer : IVersioned
             new("answer.invalid_author", "Only the author can edit this answer.");
         
         public static readonly DomainError EmptyBody = 
-            new("answer.empty_body", "The body of the answer must not be null or empty");
+            new("answer.empty_body", "The body of the answer must not be null or empty.");
     }
 }

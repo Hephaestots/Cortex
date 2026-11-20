@@ -94,7 +94,7 @@ public sealed class CreateAnswerTests(AppFixture fixture)
         var result = await PostAsync(question.Id.ToString(), new CreateAnswerRequest(""), TestUsers.Reader, 400);
 
         (await result.ReadProblemAsync()).ErrorsFor("Body")
-            .ShouldBe(["The body of the answer must not be null or empty"]);
+            .ShouldBe(["The body of the answer must not be null or empty."]);
     }
 
     [Fact]
