@@ -8,6 +8,10 @@ namespace Cortex.QuestionService.Tests.Endpoints.Tags;
 /// The smoke test for the whole setup: if this passes, the container started, the migrations
 /// and the tag seeding ran through the normal startup path, and the host answers HTTP.
 /// </summary>
+/// <remarks>
+/// Other tests add their own tags (<see cref="TestData.CreateTagAsync"/>), so the checks are
+/// about the seeded tags being there and in order, not about the list holding only them.
+/// </remarks>
 public sealed class GetTagsTests(AppFixture fixture)
 {
     [Fact]
@@ -20,9 +24,12 @@ public sealed class GetTagsTests(AppFixture fixture)
         });
 
         var tags = await result.ReadAsJsonAsync<List<TagSummary>>();
+        var seededSlugs = TagSeed.All.Select(t => t.Slug).ToHashSet();
 
         tags.ShouldNotBeNull();
-        tags.Select(t => t.Slug).ShouldBe(TagSeed.All.Select(t => t.Slug), ignoreOrder: true);
-        tags.Select(t => t.Name).ShouldBeInOrder(SortDirection.Ascending, StringComparer.Ordinal);
+        seededSlugs.ShouldBeSubsetOf(tags.Select(t => t.Slug));
+        tags.Where(t => seededSlugs.Contains(t.Slug))
+            .Select(t => t.Name)
+            .ShouldBeInOrder(SortDirection.Ascending, StringComparer.Ordinal);
     }
 }
