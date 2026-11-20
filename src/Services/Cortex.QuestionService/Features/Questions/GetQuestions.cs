@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Features.Shared;
@@ -45,16 +46,7 @@ public static class GetQuestionsEndpoint
             .ThenByDescending(question => question.Id)
             .Skip(query.Skip)
             .Take(query.PageSize)
-            .Select(question => new QuestionSummary(
-                question.Id,
-                question.Title,
-                question.AuthorDisplayName,
-                question.BookId,
-                question.Tags.Select(tag => tag.Slug).OrderBy(slug => slug).ToList(),
-                question.Answers.Count,
-                question.Votes.Sum(vote => (int)vote.Value),
-                question.AcceptedAnswerId != null,
-                question.CreatedAt))
+            .Select(QuestionSummary.Projection)
             .ToListAsync(ct);
 
         return TypedResults.Ok(new PagedResponse<QuestionSummary>(items, query.Page, query.PageSize, totalCount));
@@ -91,4 +83,17 @@ public sealed record QuestionSummary(
     int AnswersCount,
     int Score,
     bool HasAcceptedAnswer,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt)
+{
+    /// <summary>The EF projection for <c>GetQuestions</c>; see <c>AnswerDetail.Projection</c> for why an expression.</summary>
+    public static readonly Expression<Func<Question, QuestionSummary>> Projection = question => new QuestionSummary(
+        question.Id,
+        question.Title,
+        question.AuthorDisplayName,
+        question.BookId,
+        question.Tags.Select(tag => tag.Slug).OrderBy(slug => slug).ToList(),
+        question.Answers.Count,
+        question.Votes.Sum(vote => (int)vote.Value),
+        question.AcceptedAnswerId != null,
+        question.CreatedAt);
+}

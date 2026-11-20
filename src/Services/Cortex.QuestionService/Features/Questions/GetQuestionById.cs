@@ -1,4 +1,6 @@
+using System.Linq.Expressions;
 using Cortex.QuestionService.Data;
+using Cortex.QuestionService.Domain;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Wolverine.Http;
@@ -21,21 +23,7 @@ public static class GetQuestionByIdEndpoint
         // A projection, not FindAsync: only these columns are read, and Score is a SUM in SQL.
         var question = await db.Questions
             .Where(question => question.Id == id)
-            .Select(question => new QuestionDetail(
-                question.Id,
-                question.Title,
-                question.Body,
-                question.AuthorId,
-                question.AuthorDisplayName,
-                question.BookId,
-                question.Tags.Select(tag => tag.Slug).OrderBy(slug => slug).ToList(),
-                question.ViewCount,
-                question.Answers.Count,
-                question.Votes.Sum(vote => (int)vote.Value),
-                question.AcceptedAnswerId,
-                question.CreatedAt,
-                question.UpdatedAt,
-                question.Version))
+            .Select(QuestionDetail.Projection)
             .FirstOrDefaultAsync(ct);
 
         return question is null
@@ -63,4 +51,22 @@ public sealed record QuestionDetail(
     Guid? AcceptedAnswerId,
     DateTimeOffset CreatedAt,
     DateTimeOffset? UpdatedAt,
-    uint Version);
+    uint Version)
+{
+    /// <summary>The EF projection for <c>GetQuestionById</c>; see <c>AnswerDetail.Projection</c> for why an expression.</summary>
+    public static readonly Expression<Func<Question, QuestionDetail>> Projection = question => new QuestionDetail(
+        question.Id,
+        question.Title,
+        question.Body,
+        question.AuthorId,
+        question.AuthorDisplayName,
+        question.BookId,
+        question.Tags.Select(tag => tag.Slug).OrderBy(slug => slug).ToList(),
+        question.ViewCount,
+        question.Answers.Count,
+        question.Votes.Sum(vote => (int)vote.Value),
+        question.AcceptedAnswerId,
+        question.CreatedAt,
+        question.UpdatedAt,
+        question.Version);
+}

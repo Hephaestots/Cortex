@@ -1,4 +1,6 @@
+using System.Linq.Expressions;
 using Cortex.QuestionService.Data;
+using Cortex.QuestionService.Domain;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Wolverine.Http;
@@ -20,7 +22,7 @@ public static class GetTagsEndpoint
             // The slug is unique, so it makes the order stable if two names ever compare equal.
             .OrderBy(tag => tag.Name)
             .ThenBy(tag => tag.Slug)
-            .Select(tag => new TagSummary(tag.Slug, tag.Name, tag.Description))
+            .Select(TagSummary.Projection)
             .ToListAsync(ct);
 
         return TypedResults.Ok<IReadOnlyList<TagSummary>>(tags);
@@ -34,4 +36,9 @@ public static class GetTagsEndpoint
 public sealed record TagSummary(
     string Slug,
     string Name,
-    string Description);
+    string Description)
+{
+    /// <summary>The EF projection for <c>GetTags</c>; see <c>AnswerDetail.Projection</c> for why an expression.</summary>
+    public static readonly Expression<Func<Tag, TagSummary>> Projection =
+        tag => new TagSummary(tag.Slug, tag.Name, tag.Description);
+}
