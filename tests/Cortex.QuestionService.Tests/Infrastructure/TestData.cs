@@ -74,6 +74,18 @@ public static class TestData
                ?? throw new InvalidOperationException("POST .../answers returned no body.");
     }
 
+    public static async Task<AnswerDetail> GetAnswerAsync(this AppFixture fixture, Guid id)
+    {
+        var result = await fixture.Host.Scenario(s =>
+        {
+            s.Get.Url($"/api/answers/{id}");
+            s.StatusCodeShouldBeOk();
+        });
+
+        return await result.ReadAsJsonAsync<AnswerDetail>()
+               ?? throw new InvalidOperationException($"GET /api/answers/{id} returned no body.");
+    }
+
     public static async Task<QuestionDetail> GetQuestionAsync(this AppFixture fixture, Guid id)
     {
         var result = await fixture.Host.Scenario(s =>
