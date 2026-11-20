@@ -21,7 +21,7 @@ public sealed class AnswerVote
         DomainGuard.AgainstNull(answer, Errors.NullAnswer);
         DomainGuard.AgainstNullOrWhiteSpace(userId, Errors.EmptyUserId);
 
-        if (userId.Length > UserIdRules.MaxLength)
+        if (userId.Length > UserRules.MaxIdLength)
             throw new DomainException(Errors.UserIdTooLong);
 
         if (answer.AuthorId == userId)
@@ -46,7 +46,7 @@ public sealed class AnswerVote
             new("answer_vote.empty_user_id", "The user id must not be null or empty.");
 
         public static readonly DomainError UserIdTooLong =
-            new("answer_vote.user_id_too_long", $"The user id exceeds {UserIdRules.MaxLength} characters.");
+            new("answer_vote.user_id_too_long", $"The user id exceeds {UserRules.MaxIdLength} characters.");
 
         public static readonly DomainError OwnAnswer =
             new("answer_vote.own_answer", "You cannot vote on your own answer.");

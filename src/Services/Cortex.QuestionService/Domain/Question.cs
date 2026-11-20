@@ -8,7 +8,6 @@ public sealed class Question : IVersioned
     public const int MaxBookIdLength = 100;
     public const int MaxTags = 5;
     public const int MaxTitleLength = 300;
-    public const int MaxDisplayNameLength = 100;
 
     private readonly List<Answer> _answers = [];
     private readonly List<Tag> _tags = [];
@@ -63,9 +62,9 @@ public sealed class Question : IVersioned
         UpdatedAt = now;
     }
 
-    public Answer AddAnswer(string body, string authorId, DateTimeOffset now)
+    public Answer AddAnswer(string body, string authorId, string authorDisplayName, DateTimeOffset now)
     {
-        var answer = new Answer(Id, body, authorId, now);
+        var answer = new Answer(Id, body, authorId, authorDisplayName, now);
         
         _answers.Add(answer);
 
@@ -102,10 +101,10 @@ public sealed class Question : IVersioned
         DomainGuard.AgainstNullOrWhiteSpace(authorId, Errors.EmptyAuthorId);
         DomainGuard.AgainstNullOrWhiteSpace(authorDisplayName, Errors.EmptyAuthorDisplayName);
 
-        if (authorId.Length > UserIdRules.MaxLength)
+        if (authorId.Length > UserRules.MaxIdLength)
             throw new DomainException(Errors.IdTooLong);
 
-        if (authorDisplayName.Length > MaxDisplayNameLength)
+        if (authorDisplayName.Length > UserRules.MaxDisplayNameLength)
             throw new DomainException(Errors.DisplayNameTooLong);
 
         AuthorId = authorId;
@@ -187,10 +186,10 @@ public sealed class Question : IVersioned
             new("question.book_id_too_long", $"The book id exceeds {MaxBookIdLength} characters.");
 
         public static readonly DomainError IdTooLong =
-            new("question.author_id_too_long", $"The author id exceeds {UserIdRules.MaxLength} characters.");
+            new("question.author_id_too_long", $"The author id exceeds {UserRules.MaxIdLength} characters.");
 
         public static readonly DomainError DisplayNameTooLong =
-            new("question.author_display_name_too_long", $"The author display name exceeds {MaxDisplayNameLength} characters.");
+            new("question.author_display_name_too_long", $"The author display name exceeds {UserRules.MaxDisplayNameLength} characters.");
         
         public static readonly DomainError InvalidAnswer =
             new("question.invalid_answer", "The answer doesn't belong to this question.");

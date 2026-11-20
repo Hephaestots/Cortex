@@ -225,7 +225,7 @@ Entities (all inside the service boundary): `Questions`, `Answers`, `QuestionVot
 
 **Keys and user references**
 - Primary keys are version 7 GUIDs created in the domain (`Guid.CreateVersion7()`). They are time-ordered, which keeps index inserts sequential, and the ID is known before the row is saved (needed for the `Created` location now and for events later).
-- Author and voter columns (`author_id`, `voter_id`) hold the Keycloak `sub` claim as a string, with no FK: users live in Keycloak, outside the service boundary. They are `varchar(255)` (`UserIdRules.MaxLength`, the OpenID Connect limit for `sub`), so nothing assumes the id is a GUID.
+- Author and voter columns (`author_id`, `voter_id`) hold the Keycloak `sub` claim as a string, with no FK: users live in Keycloak, outside the service boundary. They are `varchar(255)` (`UserRules.MaxIdLength`, the OpenID Connect limit for `sub`), so nothing assumes the id is a GUID.
 
 **Naming**
 - `EFCore.NamingConventions` (`UseSnakeCaseNamingConvention()`) names columns, keys, indexes and FKs, so nothing needs quoting in Postgres and configurations do not repeat `HasColumnName`.

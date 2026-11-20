@@ -18,13 +18,20 @@ public sealed class AnswerConfiguration : IEntityTypeConfiguration<Answer>
             .HasName("ak_answers_question_id_answer_id");
 
         builder.Property(answer => answer.Id)
-            .HasColumnName("answer_id");
+            .HasColumnName("answer_id")
+            .ValueGeneratedNever();
 
         builder.Property(answer => answer.AuthorId)
-            .HasMaxLength(UserIdRules.MaxLength);
+            .HasMaxLength(UserRules.MaxIdLength);
+        
+        builder.Property(answer => answer.AuthorDisplayName)
+            .HasMaxLength(UserRules.MaxDisplayNameLength);
 
         builder.Property(answer => answer.Body)
             .HasMaxLength(Answer.MaxBodyLength);
+        
+        builder.Property(answer => answer.Version)
+            .IsRowVersion();
 
         builder.HasOne(answer => answer.Question)
             .WithMany(question => question.Answers)

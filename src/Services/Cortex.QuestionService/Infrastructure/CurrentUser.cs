@@ -27,8 +27,15 @@ public sealed class CurrentUser(IHttpContextAccessor accessor)
         ?? throw new InvalidOperationException(
             "No authenticated user on this request. Is the endpoint missing [Authorize]?");
 
-    /// <summary><c>preferred_username</c>, as configured in AddCortexAuth.</summary>
-    public string? DisplayName => Principal?.Identity?.Name;
+    /// <summary>
+    /// <c>preferred_username</c>, as configured in AddCortexAuth. Like <see cref="Id"/>, only read
+    /// it in endpoints marked <c>[Authorize]</c>: it throws when the claim is missing, so a token
+    /// without a username fails loudly instead of storing an empty author name.
+    /// </summary>
+    public string DisplayName =>
+        Principal?.Identity?.Name
+        ?? throw new InvalidOperationException(
+            "The token has no preferred_username claim. Is the endpoint missing [Authorize]?");
 
     public string? Email => Principal?.FindFirstValue("email");
 

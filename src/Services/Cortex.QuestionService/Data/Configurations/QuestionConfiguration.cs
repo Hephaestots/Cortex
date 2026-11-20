@@ -13,10 +13,11 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
         builder.HasKey(question => question.Id);
 
         builder.Property(question => question.Id)
-            .HasColumnName("question_id");
+            .HasColumnName("question_id")
+            .ValueGeneratedNever();
 
         builder.Property(question => question.AuthorId)
-            .HasMaxLength(UserIdRules.MaxLength);
+            .HasMaxLength(UserRules.MaxIdLength);
 
         builder.Property(question => question.Body)
             .HasMaxLength(Question.MaxBodyLength);
@@ -25,7 +26,7 @@ public sealed class QuestionConfiguration : IEntityTypeConfiguration<Question>
             .HasMaxLength(Question.MaxTitleLength);
         
         builder.Property(question => question.AuthorDisplayName)
-            .HasMaxLength(Question.MaxDisplayNameLength);
+            .HasMaxLength(UserRules.MaxDisplayNameLength);
 
         builder.Property(question => question.BookId)
             .HasMaxLength(Question.MaxBookIdLength);

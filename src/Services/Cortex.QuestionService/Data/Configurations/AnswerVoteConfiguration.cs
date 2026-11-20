@@ -14,7 +14,7 @@ public sealed class AnswerVoteConfiguration : IEntityTypeConfiguration<AnswerVot
         builder.HasKey(vote => new { vote.AnswerId, vote.VoterId });
 
         builder.Property(vote => vote.VoterId)
-            .HasMaxLength(UserIdRules.MaxLength);
+            .HasMaxLength(UserRules.MaxIdLength);
 
         builder.HasOne(vote => vote.Answer)
             .WithMany(answer => answer.Votes)

@@ -29,7 +29,7 @@ public static class CreateQuestionEndpoint
             request.Title,
             request.Body,
             user.Id,
-            user.DisplayName ?? throw new InvalidOperationException("User display name must not be null"),
+            user.DisplayName,
             request.BookId,
             lookup.Tags,
             timeProvider.GetUtcNow());
