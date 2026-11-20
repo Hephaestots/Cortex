@@ -1,5 +1,8 @@
 using Cortex.SearchService.Infrastructure;
 using Cortex.ServiceDefaults;
+using Wolverine;
+using Wolverine.Http;
+using Wolverine.Http.FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +10,9 @@ builder.AddServiceDefaults();
 builder.AddTypesense();
 builder.Services.AddSearchCollections();
 builder.Services.AddOpenApi();
+
+builder.Host.UseWolverine(opts => opts.ConfigureSearchService());
+builder.Services.AddWolverineHttp();
 
 var app = builder.Build();
 
@@ -27,5 +33,13 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapDefaultEndpoints();
+
+// The same options as the Question service: validation failures as problem details, and
+// ?page=abc as a 400 instead of silently using the default value.
+app.MapWolverineEndpoints(opts =>
+{
+    opts.UseFluentValidationProblemDetailMiddleware();
+    opts.RejectUnparseableQueryValues = true;
+});
 
 app.Run();
