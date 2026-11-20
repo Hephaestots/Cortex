@@ -30,8 +30,10 @@ Last updated: 2026-11-20. Update this file when a milestone lands or a decision 
 |---|---|
 | 1. AppHost infrastructure | Keycloak and Postgres done. RabbitMQ moves to step 4. |
 | 2. Gateway plus Next.js auth round trip | Deferred until after step 3. Services validate JWTs themselves, so step 3 does not depend on it. |
-| 3. Questions and answers CRUD | In progress (plan below). |
-| 4 to 7 | Not started. |
+| 3. Questions and answers CRUD | Paused on 2026-11-20 with only `AcceptAnswer` (item 7) and the `.http` file (item 8) left. |
+| 4. RabbitMQ, contracts, events and outbox | Next, pulled together with the Search service (see "Next up"). |
+| 6. Search | Pulled forward on 2026-11-20 (see "Next up"). Notifications and Reputation stay in step 6. |
+| 5, 7 | Not started. |
 
 ## Step 3 plan
 Each item is one small commit.
@@ -220,8 +222,14 @@ On `main` (merged 2026-11-20).
 
 **Rejected:** a version column incremented by the domain instead of `xmin` (would also fix it, but every mutating method must remember it, and the counter would still lock the question row on every view).
 
-## Next up: item 7
-`AcceptAnswer` (question author only; `Question.AcceptAnswer` and `ClearAcceptedAnswer` exist in the domain, the endpoint does not), then item 8.
+## Next up: the Search service (decided 2026-11-20)
+The user explores and writes this themselves; Claude reviews it and gives input on better practices or alternatives (Elasticsearch was mentioned as heavier).
+
+- **Goal:** a `Cortex.SearchService` that keeps a Typesense index of questions up to date from the Questions service's events, sent through RabbitMQ: a question created, edited and deleted.
+- **What it pulls forward:** step 4 of the build order (RabbitMQ in the AppHost, `Cortex.Contracts`, Wolverine events, cascading return tuples and the EF Core outbox in Questions, replacing the explicit `SaveChangesAsync`) and the Search part of step 6.
+- **Changes an architecture decision:** `docs/architecture.md` planned Search as "Postgres full-text first". Typesense is chosen instead, to learn a real search engine. Trade-off to keep in mind: one more container and a second copy of the data that can drift from Postgres, so the service needs a way to rebuild its index.
+- **Deferred:** `AcceptAnswer` (question author only; `Question.AcceptAnswer` and `ClearAcceptedAnswer` exist in the domain, the endpoint does not) and item 8, the `.http` file.
+- **To revisit with step 4:** view counts through a `QuestionViewed` message (see "View counts"), and whether answers should reach the index (answer events).
 
 ## Repository state
 - Items 1 to 5, item 6.1 (tag seeding, with the question service health check in the AppHost) and the `CreateQuestion` slice of item 6 are on `main` and pushed (item 5 was committed before item 4, because the registration needs the context and its entities). `GetQuestions` (`9c70bcb`) and `GetQuestionById` (`a22bb44`) are on `main` and pushed. `GetTags` (`2a83cff`) is on `main` and pushed. `EditQuestion`, the shared helpers and optimistic concurrency (migration `20261118235518_AddQuestionVersion`, empty on purpose) are on `main` and pushed (`f372972`). `DeleteQuestion` is on `main` (`b67c986`). `CreateAnswer` is on `main` (`2e031dd`). The test project and its tests are on `main` (`fb4f1c5`). The other answer slices and the read projections are on `main` (merged 2026-11-20). View counts are on `main` (merged 2026-11-20).
