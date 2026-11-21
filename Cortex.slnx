@@ -12,5 +12,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cortex.QuestionService.Tests/Cortex.QuestionService.Tests.csproj" />
+    <Project Path="tests/Cortex.SearchService.Tests/Cortex.SearchService.Tests.csproj" />
   </Folder>
 </Solution>

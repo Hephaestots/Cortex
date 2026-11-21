@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RootNamespace>Cortex.SearchService.Tests</RootNamespace>
+        <!-- xUnit v3 test projects are executables, run through Microsoft.Testing.Platform
+             (opted into for dotnet test in global.json), so no VSTest packages are needed. -->
+        <OutputType>Exe</OutputType>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Alba" Version="9.0.0" />
+        <PackageReference Include="Shouldly" Version="4.3.0" />
+        <!-- The base package: Typesense has no Testcontainers module, so the fixture builds the
+             container itself with the generic ContainerBuilder. -->
+        <PackageReference Include="Testcontainers" Version="4.17.0" />
+        <PackageReference Include="xunit.v3" Version="4.0.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Alba" />
+        <Using Include="Microsoft.Extensions.DependencyInjection" />
+        <Using Include="Shouldly" />
+        <Using Include="Xunit" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\Services\Cortex.SearchService\Cortex.SearchService.csproj" />
+    </ItemGroup>
+
+</Project>

@@ -43,3 +43,10 @@ app.MapWolverineEndpoints(opts =>
 });
 
 app.Run();
+
+
+/// <summary>
+/// Makes the generated entry point visible to the test project, which boots this exact
+/// pipeline in memory (Alba / WebApplicationFactory need a public <c>Program</c> type).
+/// </summary>
+public partial class Program;
