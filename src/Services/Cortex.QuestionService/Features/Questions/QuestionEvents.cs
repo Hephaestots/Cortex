@@ -1,4 +1,5 @@
 using Cortex.Contracts;
+using Cortex.Contracts.Features.Questions;
 using Cortex.QuestionService.Domain;
 
 namespace Cortex.QuestionService.Features.Questions;
@@ -15,19 +16,36 @@ namespace Cortex.QuestionService.Features.Questions;
 /// endpoints that publish, like <c>CreateQuestionResponse.From</c> for the HTTP response.
 /// </para>
 /// <para>
-/// Call it after <c>SaveChangesAsync</c> when an event carries a database-generated value (a version,
-/// say), so the value is read back first. <see cref="QuestionCreated"/> carries none today.
+/// Call it after <c>SaveChangesAsync</c>: the created and updated events carry the question's
+/// <c>Version</c>, which the database sets on every save and EF reads back.
 /// </para>
 /// </remarks>
 public static class QuestionEvents
 {
-    public static QuestionCreated ToQuestionCreated(this Question question) => new(
-        question.Id,
-        question.Title,
-        question.Body,
-        [.. question.Tags.Select(tag => tag.Slug)],
-        question.AuthorId,
-        question.AuthorDisplayName,
-        question.BookId,
-        question.CreatedAt);
+    extension(Question question)
+    {
+        public QuestionCreated ToQuestionCreated() => 
+            new(
+                question.Id,
+                question.Title,
+                question.Body,
+                [.. question.Tags.Select(tag => tag.Slug)],
+                question.AuthorId,
+                question.AuthorDisplayName,
+                question.BookId,
+                question.CreatedAt,
+                question.Version);
+
+        public QuestionUpdated ToQuestionUpdated() =>
+            new(
+                question.Id,
+                question.Title,
+                question.Body,
+                [.. question.Tags.Select(tag => tag.Slug)],
+                question.UpdatedAt!.Value,
+                question.Version);
+
+        public QuestionDeleted ToQuestionDeleted() =>
+            new(question.Id);
+    }
 }

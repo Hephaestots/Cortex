@@ -1,4 +1,5 @@
 using Cortex.Contracts;
+using Cortex.Contracts.Features.Questions;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Features.Shared;

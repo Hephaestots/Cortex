@@ -1,3 +1,4 @@
+using Cortex.Contracts.Features.Questions;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Infrastructure;
@@ -50,7 +51,7 @@ public static class DeleteQuestionEndpoint
 
     [Authorize]
     [WolverineDelete("/api/questions/{id:guid}")]
-    public static async Task<NoContent> Delete(
+    public static async Task<(NoContent, QuestionDeleted?)> Delete(
         // Not used in the body: bound here because [FromQuery] only works on the endpoint method,
         // and that is also what makes the FluentValidation middleware validate it.
         [FromQuery] DeleteQuestionQuery query,
@@ -66,7 +67,9 @@ public static class DeleteQuestionEndpoint
         // DbUpdateConcurrencyException (409) if the row changed after LoadAsync.
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.NoContent();
+        return (
+            TypedResults.NoContent(),
+            question.ToQuestionDeleted());
     }
 }
 

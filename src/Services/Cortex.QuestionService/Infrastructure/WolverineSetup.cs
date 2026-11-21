@@ -1,4 +1,5 @@
 using Cortex.Contracts;
+using Cortex.Contracts.Features.Questions;
 using Wolverine;
 using Wolverine.EntityFrameworkCore;
 using Wolverine.FluentValidation;
@@ -44,6 +45,8 @@ public static class WolverineSetup
         // Each integration event is routed explicitly, so a message meant to stay inside the service
         // (a future QuestionViewed, say) never reaches the exchange by accident.
         opts.PublishMessage<QuestionCreated>().ToRabbitExchange("questions");
+        opts.PublishMessage<QuestionUpdated>().ToRabbitExchange("questions");
+        opts.PublishMessage<QuestionDeleted>().ToRabbitExchange("questions");
 
         return opts;
     }

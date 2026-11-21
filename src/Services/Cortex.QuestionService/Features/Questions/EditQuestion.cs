@@ -1,3 +1,4 @@
+using Cortex.Contracts.Features.Questions;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Features.Shared;
@@ -51,7 +52,7 @@ public static class EditQuestionEndpoint
 
     [Authorize]
     [WolverinePut("/api/questions/{id:guid}")]
-    public static async Task<Results<NoContent, ValidationProblem>> Put(
+    public static async Task<(Results<NoContent, ValidationProblem>, QuestionUpdated?)> Put(
         EditQuestionRequest request,
         Question question,
         QuestionDbContext db,
@@ -61,14 +62,18 @@ public static class EditQuestionEndpoint
         var lookup = await TagLookup.FindBySlugsAsync(db, request.TagSlugs, ct);
 
         if (lookup.HasMissing)
-            return Problems.Validation(nameof(EditQuestionRequest.TagSlugs), lookup.MissingMessages);
+            return (
+                Problems.Validation(nameof(EditQuestionRequest.TagSlugs), lookup.MissingMessages),
+                null);
 
         question.Edit(request.Title, request.Body, lookup.Tags, timeProvider.GetUtcNow());
 
         // Throws DbUpdateConcurrencyException (409) if the row changed after LoadAsync.
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.NoContent();
+        return (
+            TypedResults.NoContent(),
+            question.ToQuestionUpdated());
     }
 }
 

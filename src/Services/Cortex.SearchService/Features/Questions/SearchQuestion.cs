@@ -76,10 +76,43 @@ public sealed class SearchQuestion
     public long LastActivityAt { get; init; }
 
     /// <summary>
-    /// The question's version from the event that produced this document. Stored but not indexed:
-    /// a handler compares it with the incoming event's version and skips the older one, since
-    /// RabbitMQ can deliver events late or more than once.
+    /// The question's version from the last create or edit applied here. Stored but not indexed: the
+    /// edit handler skips an event that is not newer, since RabbitMQ can deliver events late or more
+    /// than once. Only <c>QuestionCreated</c> and <c>QuestionUpdated</c> set it: an answer or vote
+    /// event that did would make a delayed edit look old and lose it.
     /// </summary>
     [JsonPropertyName(Fields.Version)]
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// The fields a <c>QuestionUpdated</c> owns, sent as a partial update. Not <see cref="SearchQuestion"/>:
+/// its defaults (a score of 0, say) would be sent too and overwrite the indexed values.
+/// </summary>
+public sealed class SearchQuestionEdit
+{
+    [JsonPropertyName(SearchQuestion.Fields.Title)]
+    public required string Title { get; init; }
+
+    [JsonPropertyName(SearchQuestion.Fields.Body)]
+    public required string Body { get; init; }
+
+    [JsonPropertyName(SearchQuestion.Fields.Tags)]
+    public List<string> Tags { get; init; } = [];
+
+    [JsonPropertyName(SearchQuestion.Fields.LastActivityAt)]
+    public long LastActivityAt { get; init; }
+
+    [JsonPropertyName(SearchQuestion.Fields.Version)]
+    public long Version { get; init; }
+}
+
+/// <summary>
+/// Only the indexed version, read by the edit handler before it applies an edit. 0 for a document
+/// indexed before versions were stored, so any edit wins.
+/// </summary>
+public sealed class SearchQuestionVersion
+{
+    [JsonPropertyName(SearchQuestion.Fields.Version)]
     public long Version { get; init; }
 }

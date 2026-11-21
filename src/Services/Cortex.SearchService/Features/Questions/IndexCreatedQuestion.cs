@@ -1,4 +1,4 @@
-using Cortex.Contracts;
+using Cortex.Contracts.Features.Questions;
 using Cortex.SearchService.Infrastructure;
 using Typesense;
 
@@ -11,9 +11,9 @@ namespace Cortex.SearchService.Features.Questions;
 public static class IndexCreatedQuestionHandler
 {
     /// <remarks>
-    /// An upsert, not a create: RabbitMQ delivers at least once, so the same event can arrive twice.
-    /// A create would fail on the second delivery and end in the dead-letter queue; an upsert just
-    /// writes the same document again.
+    /// A create, not an upsert: RabbitMQ delivers at least once, and a create redelivered after an
+    /// edit would upsert the original title and body back over it. A 409 means the document is
+    /// already there, from this event or a newer one, so it counts as done.
     /// </remarks>
     public static async Task HandleAsync(
         QuestionCreated message,
@@ -34,9 +34,17 @@ public static class IndexCreatedQuestionHandler
             BookId = message.BookId,
             CreatedAt = createdAt,
             // A new question's last activity is its creation; 0 would sort it last under "recently active".
-            LastActivityAt = createdAt
+            LastActivityAt = createdAt,
+            Version = message.Version
         };
 
-        await client.UpsertDocument(SearchQuestion.CollectionName, document, ct);
+        try
+        {
+            await client.CreateDocument(SearchQuestion.CollectionName, document, ct);
+        }
+        catch (TypesenseApiConflictException)
+        {
+            // Already indexed: see the remarks.
+        }
     }
 }
