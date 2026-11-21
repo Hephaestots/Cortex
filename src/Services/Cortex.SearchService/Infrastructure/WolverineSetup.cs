@@ -1,6 +1,7 @@
 using Typesense;
 using Wolverine;
 using Wolverine.FluentValidation;
+using Wolverine.RabbitMQ;
 
 namespace Cortex.SearchService.Infrastructure;
 
@@ -15,6 +16,14 @@ public static class WolverineSetup
         // Wolverine 6 does not start without this (see "Gotchas" in docs/status.md).
         opts.UseRuntimeCompilation();
         opts.UseFluentValidation();
+        
+        opts.UseRabbitMqUsingNamedConnection("rabbit-mq")
+            .AutoProvision();
+
+        opts.ListenToRabbitQueue("questions.search", config =>
+        {
+            config.BindExchange("questions");
+        });
 
         // AddTypesenseClient registers ITypesenseClient through a factory lambda (a typed HttpClient),
         // which Wolverine's generated code cannot see into, and Wolverine 6 refuses service location

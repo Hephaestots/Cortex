@@ -1,5 +1,7 @@
 using Cortex.SearchService.Infrastructure;
 using Cortex.ServiceDefaults;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Wolverine;
 using Wolverine.Http;
 using Wolverine.Http.FluentValidation;
@@ -9,6 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddTypesense();
 builder.Services.AddSearchCollections();
+builder.Services.AddSearchOpenTelemetry(builder);
 builder.Services.AddOpenApi();
 
 builder.Host.UseWolverine(opts => opts.ConfigureSearchService());

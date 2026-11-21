@@ -1,5 +1,7 @@
 using Cortex.QuestionService.Data;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Cortex.QuestionService.Infrastructure;
 
@@ -51,6 +53,22 @@ public static class ServiceCollectionExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<CurrentUser>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddQuestionOpenTelemetry(this IServiceCollection services, WebApplicationBuilder builder)
+    {
+        
+        services.AddOpenTelemetry()
+            .WithTracing(tracerProvider =>
+            {
+                tracerProvider
+                    .SetResourceBuilder(ResourceBuilder
+                        .CreateDefault()
+                        .AddService(builder.Environment.ApplicationName))
+                    .AddSource("Wolverine");
+            });
 
         return services;
     }

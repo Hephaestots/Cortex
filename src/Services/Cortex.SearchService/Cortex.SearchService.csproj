@@ -11,6 +11,7 @@
         <PackageReference Include="Typesense" Version="9.2.0" />
         <PackageReference Include="WolverineFx.Http" Version="6.64.0" />
         <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.64.0" />
+        <PackageReference Include="WolverineFx.RabbitMQ" Version="6.64.0" />
         <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.64.0" />
     </ItemGroup>
 

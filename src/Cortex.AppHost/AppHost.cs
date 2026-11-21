@@ -16,6 +16,11 @@ var postgres = builder
 // (ConnectionStrings:questions-db).
 var questionsDb = postgres.AddDatabase("questions-db");
 
+var rabbitmq = builder
+    .AddRabbitMQ("rabbit-mq")
+    .WithDataVolume("rabbitmq-data")
+    .WithManagementPlugin(port: 15672);
+
 // Typesense's admin API key. A secret parameter, so the value never sits in the source: Aspire
 // reads it from the AppHost's user secrets (Parameters:typesense-api-key) and asks for it in the
 // dashboard when it's missing. The container and the Search service get the same value.
@@ -40,6 +45,8 @@ var questionService = builder
     .WaitFor(keycloak)
     .WithReference(questionsDb)
     .WaitFor(questionsDb)
+    .WithReference(rabbitmq)
+    .WaitFor(rabbitmq)
     // Without this, "healthy" only means the process started. /health (mapped by
     // MapDefaultEndpoints) answers once migrations and seeding are done and the app listens.
     .WithHttpHealthCheck("/health");
@@ -50,6 +57,8 @@ var searchService = builder
     .WithReference(typesenseEndpoint)
     .WithEnvironment("Typesense__ApiKey", typesenseApiKey)
     .WaitFor(typesense)
+    .WithReference(rabbitmq)
+    .WaitFor(rabbitmq)
     .WithHttpHealthCheck("/health");
 
 builder.Build().Run();
