@@ -28,6 +28,9 @@ Read these before larger changes:
 - **IDs:** entity IDs are `Guid.CreateVersion7()`, generated in the domain. The Keycloak user id (`sub`) is stored as a `string`, with no FK.
 - **Migrations** are applied at startup in Development only.
 - **Events live in `Cortex.Contracts`**, are immutable, and evolve compatibly (add optional fields; never rename or remove).
+- **Map entities to events at the edge:** extension methods in `Features/<Resource>/<Resource>Events.cs` (e.g. `question.ToQuestionCreated()`), never on the domain entity (the domain doesn't know contracts) and never inline in the endpoint. Requests map to new entities with a `ToX(...)` method on the request record, as responses map with `From(entity)`.
+- **Question and answer bodies are Markdown** (CommonMark), stored exactly as written; titles are plain text. The frontend renders bodies with raw HTML disabled, and search indexes them as plain text through Markdig (`MarkdownText.ToPlainText` in the Search service, also with HTML disabled), so the index matches what a reader sees.
+- **Message handlers have an explicit error policy** in their service's `WolverineSetup`: transient failures retry with cooldown, permanent ones go straight to the dead-letter queue, anything else retries twice and then dead-letters. Nothing is dropped silently.
 - **Each service owns its data.** No cross-service DB reads/writes; reference other services' data by ID only (e.g. `Questions.BookId` = Open Library work key, never validated by Questions).
 - Every service calls `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()` (Aspire health checks and `WaitFor` depend on it).
 - Wolverine discovery is assembly-scoped: endpoints/handlers in another assembly need `opts.Discovery.IncludeAssembly(...)`.

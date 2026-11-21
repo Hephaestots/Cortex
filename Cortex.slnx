@@ -3,6 +3,9 @@
     <Project Path="src/Cortex.AppHost/Cortex.AppHost.csproj" />
     <Project Path="src/Cortex.ServiceDefaults/Cortex.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/src/common/">
+    <Project Path="src/Cortex.Contracts/Cortex.Contracts.csproj" />
+  </Folder>
   <Folder Name="/src/Services/">
     <Project Path="src/Services/Cortex.QuestionService/Cortex.QuestionService.csproj" />
     <Project Path="src/Services/Cortex.SearchService/Cortex.SearchService.csproj" />

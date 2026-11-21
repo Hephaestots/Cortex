@@ -1,3 +1,4 @@
+using Cortex.Contracts;
 using Cortex.QuestionService.Data;
 using Cortex.QuestionService.Domain;
 using Cortex.QuestionService.Features.Shared;
@@ -13,7 +14,7 @@ public static class CreateQuestionEndpoint
 {
     [Authorize]
     [WolverinePost("/api/questions")]
-    public static async Task<Results<Created<CreateQuestionResponse>, ValidationProblem>> Post(
+    public static async Task<(Results<Created<CreateQuestionResponse>, ValidationProblem>, QuestionCreated?)> Post(
         CreateQuestionRequest request,
         CurrentUser user,
         QuestionDbContext db,
@@ -23,23 +24,21 @@ public static class CreateQuestionEndpoint
         var lookup = await TagLookup.FindBySlugsAsync(db, request.TagSlugs, ct);
 
         if (lookup.HasMissing)
-            return Problems.Validation(nameof(CreateQuestionRequest.TagSlugs), lookup.MissingMessages);
+            return (
+                Problems.Validation(nameof(CreateQuestionRequest.TagSlugs), lookup.MissingMessages),
+                null);
 
-        var question = new Question(
-            request.Title,
-            request.Body,
-            user.Id,
-            user.DisplayName,
-            request.BookId,
-            lookup.Tags,
-            timeProvider.GetUtcNow());
-        
+        var question = request.ToQuestion(user, lookup.Tags, timeProvider.GetUtcNow());
         db.Questions.Add(question);
+
+        // Kept on purpose, inside the transaction Wolverine opened before this method (Eager mode,
+        // see WolverineSetup): it reads back the question's version (xmin) for the response. The
+        // transactional middleware then saves the QuestionCreated outbox row and commits both at once.
         await db.SaveChangesAsync(ct);
 
-        return TypedResults.Created(
-            uri: $"/api/questions/{question.Id}", 
-            CreateQuestionResponse.From(question));
+        return (
+            TypedResults.Created($"/api/questions/{question.Id}", CreateQuestionResponse.From(question)),
+            question.ToQuestionCreated());
     }
 }
 
@@ -49,6 +48,14 @@ public sealed record CreateQuestionRequest(
     string? BookId,
     IReadOnlyList<string> TagSlugs)
 {
+    /// <summary>
+    /// The new question for this request. The author comes from the token, never from the body; the
+    /// tags are the ones the endpoint looked up from <see cref="TagSlugs"/>. The domain still enforces
+    /// every rule (the constructor throws <c>DomainException</c>).
+    /// </summary>
+    public Question ToQuestion(CurrentUser author, IEnumerable<Tag> tags, DateTimeOffset now) =>
+        new(Title, Body, author.Id, author.DisplayName, BookId, tags, now);
+
     public class CreateQuestionValidator : AbstractValidator<CreateQuestionRequest>
     {
         public CreateQuestionValidator()
@@ -104,6 +111,5 @@ public sealed record CreateQuestionResponse(
         question.BookId,
         [.. question.Tags.Select(t => t.Slug)],
         question.CreatedAt,
-        // Read back by EF from the INSERT, so the client can edit without a GET first.
         question.Version);
 }

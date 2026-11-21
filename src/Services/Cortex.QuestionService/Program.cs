@@ -1,8 +1,6 @@
 using Cortex.QuestionService.Infrastructure;
 using Cortex.ServiceDefaults;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Wolverine;
 using Wolverine.Http;
 using Wolverine.Http.FluentValidation;
@@ -13,12 +11,11 @@ builder.AddServiceDefaults();
 builder.Services.AddOpenApi();
 builder.AddCortexAuth();
 builder.AddQuestionServiceData();
-builder.Services.AddQuestionOpenTelemetry(builder);
 builder.Services.AddCurrentUser();
 builder.Services.AddErrorHandling();
 builder.Services.TryAddSingleton(TimeProvider.System);
 
-builder.Host.UseWolverine(opts => opts.ConfigureQuestionService());
+builder.Host.UseWolverine(opts => opts.ConfigureQuestionService(builder.Configuration));
 builder.Services.AddWolverineHttp();
 
 var app = builder.Build();

@@ -1,6 +1,4 @@
 using Cortex.SearchService.Features.Questions;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
 using Typesense.Setup;
 
 namespace Cortex.SearchService.Infrastructure;
@@ -43,22 +41,6 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<ISearchCollection, QuestionsCollection>();
         services.AddSingleton<SearchCollectionsInitializer>();
-
-        return services;
-    }
-    
-    public static IServiceCollection AddSearchOpenTelemetry(this IServiceCollection services, WebApplicationBuilder builder)
-    {
-        
-        services.AddOpenTelemetry()
-            .WithTracing(tracerProvider =>
-            {
-                tracerProvider
-                    .SetResourceBuilder(ResourceBuilder
-                        .CreateDefault()
-                        .AddService(builder.Environment.ApplicationName))
-                    .AddSource("Wolverine");
-            });
 
         return services;
     }

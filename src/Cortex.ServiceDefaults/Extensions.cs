@@ -63,6 +63,9 @@ public static class Extensions
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    // Wolverine's spans: handlers, sends and receives, so a request in one service
+                    // and the message it causes in another show up as one trace in the dashboard.
+                    .AddSource("Wolverine")
                     .AddAspNetCoreInstrumentation(opts =>
                         // Exclude health check requests from tracing
                         opts.Filter = context =>

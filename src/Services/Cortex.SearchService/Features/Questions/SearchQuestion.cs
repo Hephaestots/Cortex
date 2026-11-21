@@ -31,9 +31,13 @@ public sealed class SearchQuestion
     [JsonPropertyName(Fields.Title)]
     public required string Title { get; init; }
 
-    /// <summary>Searched, lowest weight. Plain text: strip any markup before indexing.</summary>
+    /// <summary>Searched, lowest weight. The Markdown body as plain text (<c>MarkdownText.ToPlainText</c>).</summary>
+    /// <remarks>
+    /// Not <c>required</c>, unlike the other text fields: searches exclude the body from their hits
+    /// (<c>exclude_fields</c>), and a required property would make every hit fail to deserialize.
+    /// </remarks>
     [JsonPropertyName(Fields.Body)]
-    public required string Body { get; init; }
+    public string Body { get; init; } = "";
 
     /// <summary>Slugs. Searched and faceted ("questions tagged x"); see token_separators for hyphens.</summary>
     [JsonPropertyName(Fields.Tags)]

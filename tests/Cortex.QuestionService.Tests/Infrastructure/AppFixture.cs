@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Testcontainers.PostgreSql;
+using Wolverine;
 
 [assembly: AssemblyFixture(typeof(Cortex.QuestionService.Tests.Infrastructure.AppFixture))]
 
@@ -42,9 +43,16 @@ public sealed class AppFixture : IAsyncLifetime
             // The name the AppHost gives the database resource; see AddQuestionServiceData.
             builder.UseSetting("ConnectionStrings:questions-db", _postgres.GetConnectionString());
 
+            // Never contacted (see DisableAllExternalWolverineTransports below), but Wolverine checks at
+            // startup that the RabbitMQ connection string it was configured with exists.
+            builder.UseSetting("ConnectionStrings:rabbit-mq", "amqp://guest:guest@localhost:5672");
+
             // Runs after Program.cs registered its services, so these defaults win over the
             // JWT bearer scheme that AddCortexAuth set. Keycloak is never contacted.
             builder.ConfigureTestServices(services => services
+                // No broker in tests: Wolverine keeps running (handlers, the outbox tables in the test
+                // database) but sends nothing to RabbitMQ.
+                .DisableAllExternalWolverineTransports()
                 .AddAuthentication(options =>
                 {
                     options.DefaultScheme = TestAuthHandler.SchemeName;

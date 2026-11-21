@@ -15,13 +15,16 @@
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.64.0" />
         <PackageReference Include="WolverineFx.Http" Version="6.64.0" />
         <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.64.0" />
+        <PackageReference Include="WolverineFx.Postgresql" Version="6.64.0" />
         <PackageReference Include="WolverineFx.RabbitMQ" Version="6.64.0" />
         <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.64.0" />
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\Cortex.Contracts\Cortex.Contracts.csproj" />
       <ProjectReference Include="..\..\Cortex.ServiceDefaults\Cortex.ServiceDefaults.csproj" />
     </ItemGroup>
 

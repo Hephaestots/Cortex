@@ -8,6 +8,7 @@
 
     <ItemGroup>
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.14"/>
+        <PackageReference Include="Markdig" Version="1.6.0" />
         <PackageReference Include="Typesense" Version="9.2.0" />
         <PackageReference Include="WolverineFx.Http" Version="6.64.0" />
         <PackageReference Include="WolverineFx.Http.FluentValidation" Version="6.64.0" />
@@ -16,6 +17,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\Cortex.Contracts\Cortex.Contracts.csproj" />
       <ProjectReference Include="..\..\Cortex.ServiceDefaults\Cortex.ServiceDefaults.csproj" />
     </ItemGroup>
 
