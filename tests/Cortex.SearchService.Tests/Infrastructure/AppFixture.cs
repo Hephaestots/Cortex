@@ -54,23 +54,37 @@ public sealed class AppFixture : IAsyncLifetime
                 .ForPath("/health")))
         .Build();
 
+    private Uri _endpoint = null!;
+    private Task<IAlbaHost>? _faultyHost;
+
     public IAlbaHost Host { get; private set; } = null!;
+
+    /// <summary>
+    /// A second host on the same container whose Typesense client throws on demand
+    /// (<see cref="TypesenseFaults"/>), for the error policy tests only. Started on first use, so a
+    /// run without those tests doesn't pay for it.
+    /// </summary>
+    public Task<IAlbaHost> FaultyHost => _faultyHost ??= StartHostAsync(services => services.AddTypesenseFaults());
 
     public async ValueTask InitializeAsync()
     {
         await _typesense.StartAsync();
 
-        var endpoint = new UriBuilder(
+        _endpoint = new UriBuilder(
             Uri.UriSchemeHttp,
             _typesense.Hostname,
             _typesense.GetMappedPublicPort(TypesensePort)).Uri;
 
-        Host = await AlbaHost.For<Program>(builder =>
+        Host = await StartHostAsync();
+    }
+
+    private async Task<IAlbaHost> StartHostAsync(Action<IServiceCollection>? configureServices = null) =>
+        await AlbaHost.For<Program>(builder =>
         {
             builder.UseEnvironment("Development");
 
             // What the AppHost passes through service discovery and the environment; see AddTypesense.
-            builder.UseSetting("services:typesense:http:0", endpoint.ToString());
+            builder.UseSetting("services:typesense:http:0", _endpoint.ToString());
             builder.UseSetting("Typesense:ApiKey", ApiKey);
 
             // Never contacted (see DisableAllExternalWolverineTransports below), but Wolverine checks at
@@ -79,14 +93,20 @@ public sealed class AppFixture : IAsyncLifetime
 
             // No broker in tests: the questions.search listener never starts, and tests hand events to
             // the handlers through Wolverine directly.
-            builder.ConfigureTestServices(services => services.DisableAllExternalWolverineTransports());
+            builder.ConfigureTestServices(services =>
+            {
+                services.DisableAllExternalWolverineTransports();
+                configureServices?.Invoke(services);
+            });
         });
-    }
 
     public async ValueTask DisposeAsync()
     {
         if (Host is not null)
             await Host.DisposeAsync();
+
+        if (_faultyHost is not null)
+            await (await _faultyHost).DisposeAsync();
 
         await _typesense.DisposeAsync();
     }
