@@ -6,7 +6,7 @@ using Wolverine;
 namespace Cortex.SearchService.Tests.Infrastructure;
 
 /// <summary>
-/// Events and index access shared by the handler tests. Events go in through Wolverine, as they
+/// Events, index access and searches shared by the tests. Events go in through Wolverine, as they
 /// would from RabbitMQ; documents are read back straight from Typesense.
 /// </summary>
 public static class TestData
@@ -38,6 +38,12 @@ public static class TestData
         TagSlugs: ["poetry"],
         UpdatedAt: new DateTimeOffset(2026, 11, 21, 12, 10, 0, TimeSpan.Zero),
         Version: 110);
+
+    /// <summary>
+    /// A tag slug only the calling test uses. The collection is shared, so a search test tags its
+    /// documents with it and filters on it, which makes totals, order and facets exact.
+    /// </summary>
+    public static string NewTag() => $"test-{Guid.NewGuid():N}"[..17];
 
     extension(AppFixture fixture)
     {
@@ -85,5 +91,28 @@ public static class TestData
                 SearchQuestion.CollectionName,
                 questionId.ToString(),
                 TestContext.Current.CancellationToken);
+
+        /// <summary>Indexes each question through the create handler, in order.</summary>
+        public async Task IndexAsync(params QuestionCreated[] questions)
+        {
+            foreach (var question in questions)
+                await fixture.SendAsync(question);
+        }
+
+        /// <summary>
+        /// <c>GET /api/search/questions</c> with the given query string (without the <c>?</c>), anonymous
+        /// like every search, expecting a 200.
+        /// </summary>
+        public async Task<SearchQuestionsResponse> SearchAsync(string query)
+        {
+            var result = await fixture.Host.Scenario(s =>
+            {
+                s.Get.Url($"/api/search/questions?{query}");
+                s.StatusCodeShouldBeOk();
+            });
+
+            return await result.ReadAsJsonAsync<SearchQuestionsResponse>()
+                ?? throw new InvalidOperationException("The search returned no body.");
+        }
     }
 }
